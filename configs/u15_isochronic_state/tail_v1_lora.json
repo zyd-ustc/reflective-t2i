@@ -1,0 +1,47 @@
+{
+  "extends": "core.json",
+  "stage": 2,
+  "component": "tail",
+  "parameterization": "gen_lora",
+  "tail_parameterization": "gen_lora",
+  "tail_lora_rank": 64,
+  "zero_optimizer": false,
+  "read_time": 0.36,
+  "state_times": [
+    0.36
+  ],
+  "state_time_probs": [
+    1.0
+  ],
+  "tail_t_min": 0.36,
+  "tail_t_max": 1.0,
+  "tail_native_prob": 0.2,
+  "tail_prompt_dropout": 0.1,
+  "keep_fraction": 0.0,
+  "role_weights": {
+    "tail_pair": 1.0
+  },
+  "source_weights": {
+    "tail_pair": 1.0
+  },
+  "lr": 3e-05,
+  "lr_final": 5e-06,
+  "warmup_steps": 300,
+  "epochs": 2,
+  "betas": [
+    0.9,
+    0.95
+  ],
+  "eps": 1e-08,
+  "weight_decay": 0.0,
+  "save_every": 1000,
+  "eval_steps": [
+    2000,
+    4000,
+    6000,
+    8000
+  ],
+  "global_batch": 64,
+  "gradient_clip": 1.0,
+  "seed": 29
+}

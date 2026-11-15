@@ -1,4 +1,4 @@
-"""Launch Stage 1 training on four 16-chip ModelArts workers."""
+"""Launch Stage 1/2 training on four 16-chip ModelArts workers."""
 
 import argparse
 import json
@@ -59,8 +59,13 @@ def _preflight(hosts, output):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--linear", required=True)
+    parser.add_argument("--linear", nargs="+", required=True)
     parser.add_argument("--resume")
+    parser.add_argument("--init-checkpoint")
+    parser.add_argument("--tail-editor-checkpoint")
+    parser.add_argument("--tail-editor-config")
+    parser.add_argument("--target-captions", nargs="+",
+                        help="JSONL files mapping uid -> target caption for the tail condition")
     parser.add_argument("--output", required=True)
     parser.add_argument("--steps", type=int)
     parser.add_argument("--master-port", type=int, default=30041)
@@ -79,8 +84,29 @@ def main():
 
     stage_cfg = Path(args.config).resolve() if args.config else Path(args.code).resolve() / "configs/u15_isochronic_state" / default_cfg
     cfg = load_config(stage_cfg)
-    if int(cfg["stage"]) != 1:
-        parser.error("Stage 1 configuration is required")
+    if int(cfg["stage"]) not in (1, 2):
+        parser.error("Stage 1 or Stage 2 configuration is required")
+
+    # The 64-chip job would otherwise fail only after every rank loads weights.
+    from qwen_latent_cot.u15_target_correction.checkpoint import geometry_gate
+
+    def _gate(path, label):
+        manifest = Path(path).resolve() / "manifest.json"
+        if not manifest.exists():
+            parser.error(f"{label} has no manifest.json: {path}")
+        stored = json.loads(manifest.read_text()).get("identity", {})
+        try:
+            geometry_gate(stored)
+        except ValueError as error:
+            parser.error(f"{label}: {error}")
+
+    for path, label in (
+        (getattr(args, "resume", None), "--resume"),
+        (args.init_checkpoint, "--init-checkpoint"),
+        (args.tail_editor_checkpoint, "--tail-editor-checkpoint"),
+    ):
+        if path:
+            _gate(path, label)
 
     launch_env = dict(
         PYTHONPATH=str(Path(args.code).resolve()),
@@ -89,7 +115,9 @@ def main():
         HCCL_NPU_SOCKET_PORT_RANGE="auto",
         HCCL_IF_BASE_PORT="64720",
         HCCL_CONNECT_TIMEOUT="3600",
-        HCCL_EXEC_TIMEOUT="3600",
+        # A storage fault once left one node waiting a full hour while the other
+        # three had already died. Fail fast so a restart is not raced by zombies.
+        HCCL_EXEC_TIMEOUT="600",
         OMP_NUM_THREADS="1",
         TOKENIZERS_PARALLELISM="false",
         PYTORCH_NPU_ALLOC_CONF="expandable_segments:True",
@@ -120,9 +148,17 @@ def main():
             "--output", str(output),
         ]
         if args.linear:
-            command += ["--linear", args.linear]
+            command += ["--linear", *args.linear]
         if args.resume:
             command += ["--resume", args.resume]
+        if args.init_checkpoint:
+            command += ["--init-checkpoint", args.init_checkpoint]
+        if args.tail_editor_checkpoint:
+            command += ["--tail-editor-checkpoint", args.tail_editor_checkpoint]
+        if args.tail_editor_config:
+            command += ["--tail-editor-config", args.tail_editor_config]
+        if args.target_captions:
+            command += ["--target-captions", *args.target_captions]
         if args.steps:
             command += ["--steps", str(args.steps)]
         log = log_dir / f"node{index}.log"

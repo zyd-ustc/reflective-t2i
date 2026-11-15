@@ -10,11 +10,16 @@ RATIO_TOLERANCE = 0.01
 
 
 def _rect_for_ratio(ratio, width, height):
-    """The largest centred rect with this aspect ratio inside the canvas."""
+    """The largest centred rect with this aspect ratio inside the canvas.
+
+    A wide image is limited by the width, so its height is ``width / ratio``.
+    Before the v2 fix this branch computed ``width * ratio`` and silently
+    clamped every landscape scene to the full square, stretching it.
+    """
     if ratio <= width / height:
         w, h = max(1, min(width, round(height * ratio))), height
     else:
-        w, h = width, max(1, min(height, round(width * ratio)))
+        w, h = width, max(1, min(height, round(width / ratio)))
     left, top = (width - w) // 2, (height - h) // 2
     return left, top, left + w, top + h
 

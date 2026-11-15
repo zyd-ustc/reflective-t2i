@@ -70,7 +70,7 @@ cd "$CODE"
 
 如果生成机器不能访问清单中的源图，可先复制**该题源图**，再加 `--source-image /path/to/copy.png`。程序校验副本与清单的 `source_sha256` 一致。文生图不使用清单里的历史图像路径。
 
-两种生成均可用 `--checkpoint-mode native` 代替 `trained`，并省略 `--checkpoint`。这是未加载检查点但仍执行编辑的对照，**不是**不编辑的原生基线。使用 `--checkpoint-mode both --checkpoint "$CKPT"` 可在同一题中生成无检查点 `native_result.png` 和检查点 `result.png`。文生图的三组共享原始状态和同一份 UND 反馈；编辑榜两组共享源图和同一种子。
+两种生成均可用 `--checkpoint-mode native` 代替 `trained`，并省略 `--checkpoint`。这是未加载检查点但仍执行编辑的对照，不是官方原生图像编辑，也不是不编辑直接出图。使用 `--checkpoint-mode both --checkpoint "$CKPT"` 时，同一加噪中间状态产生三张图：`baseline.png` 不经过转换器直接续生，`native_result.png` 走未加载检查点的转换，`result.png` 走已加载检查点的转换。文生图的三组共享原始状态和同一份 UND 反馈。
 
 ## 评分一题
 
@@ -86,7 +86,7 @@ cd "$CODE"
   --env-file "$ENV_FILE" --output /path/to/edit-score.json
 ```
 
-文生图可把 `--arm result` 改为 `--arm baseline`，单独评分原生基线。`both` 模式下还可用 `--arm native_result` 评分未加载检查点的编辑结果。编辑评分默认读取原始源图；若评分机器只能访问已校验副本，也可传 `--source-image`。DPG 的问题依赖冻结评分数据，默认从 `/data/zyd_workspace/isochronic_data_20261107/benchmark_assets/scoring_sources` 读取；该文件复制自冻结评分数据，也可用 `--source-root` 指向已复制的数据。
+文生图可把 `--arm result` 改为 `--arm baseline`，单独评分原生基线。编辑的 `baseline` 是加噪后续生、未经转换器的对照；`native_result` 是未加载检查点的转换结果。编辑评分默认读取原始源图；若评分机器只能访问已校验副本，也可传 `--source-image`。DPG 的问题依赖冻结评分数据，默认从 `/data/zyd_workspace/isochronic_data_20261107/benchmark_assets/scoring_sources` 读取；该文件复制自冻结评分数据，也可用 `--source-root` 指向已复制的数据。
 
 MagicBrush 和 Emu Edit 使用独立的本地 CLIP、DINO 与像素指标，不调用 GLM。运行前需将冻结指标资产复制到 `modelarts-64`，使用 `--metrics-assets` 指定目录。可用 `--metadata-file` 和 `--reference-image` 指定复制后的元数据与目标图；程序根据冻结清单检查它们。MagicBrush 还需要原始 `local_descriptions.json`，通过 `--captions` 指定；复制 `READY.json` 后可用 `--prepared-ready` 指定，以校验清单和说明文件。这两榜应在能访问冻结评测数据和 `tool_assets` 的机器及对应 CPU 环境中运行。MagicBrush 参考目标图，Emu Edit 的图像相似度参考源图。ABACUS 诊断也可用 `--metadata-file` 指定已复制的冻结元数据。MagicBrush、Emu Edit 和 ABACUS 的这些复制路径尚未做真实评分测试。
 

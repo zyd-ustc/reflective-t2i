@@ -73,13 +73,80 @@ def normalize(bench, value):
     raise ValueError('invalid single answer')
 
 
+def _visible_answer(content):
+    if not isinstance(content, str):
+        raise ValueError('answer must be a string')
+    text = content.strip()
+    if '<think>' in text:
+        if '</think>' not in text:
+            raise ValueError('unclosed thinking')
+        text = text.split('</think>')[-1].strip()
+    if text.startswith('```'):
+        text = re.sub(r'^```(?:json)?\s*', '', text)
+        text = re.sub(r'\s*```$', '', text).strip()
+    if not text:
+        raise ValueError('empty answer')
+    return text
+
+
+def _json_answer(text):
+    """Return the answer string when the response contains one JSON object."""
+    try:
+        value = unique_json(text)
+    except ValueError:
+        matches = list(re.finditer(r'\{[^{}]*\}', text, re.S))
+        if len(matches) != 1:
+            return None
+        try:
+            value = unique_json(matches[0].group())
+        except ValueError:
+            return None
+    if not isinstance(value, dict):
+        return None
+    if 'answer' not in value:
+        raise ValueError('answer JSON must have exactly one field')
+    answer = value['answer']
+    if isinstance(answer, bool) or not isinstance(answer, (str, int)):
+        raise ValueError('answer JSON must have exactly one field')
+    if isinstance(answer, int):
+        return str(answer)
+    return answer
+
+
+def _explicit_token(bench, text):
+    """Keep a leading legal token and its explanation. Do not search inside prose."""
+    text = text.strip()
+    if bench == 'spatial_geneval':
+        match = re.fullmatch(r'([A-Ea-e])(?:\s*[:.\-—–)\]]\s*\S[\s\S]*)?', text)
+        if match:
+            return match.group(1)
+    if bench in ('tiif_bench', 'dsg', 'unigenbench', 'geneval2'):
+        match = re.fullmatch(
+            r'(?i)(yes|no|unknown|uncertain|unable to determine)\b[\s\S]*', text)
+        if match:
+            return match.group(1)
+    if bench == 'geneval2':
+        match = re.fullmatch(r'([0-9])(?:\s*[:.\-—–]\s*\S[\s\S]*)?', text)
+        if match:
+            return match.group(1)
+    if bench in ('oneig_bench', 'prism_bench', 'genai_bench'):
+        match = re.fullmatch(r'([1-5])(?:\s*[:.\-—–]\s*\S[\s\S]*)?', text)
+        if match:
+            return match.group(1)
+    return text
+
+
+def interpret(bench, content):
+    """Normalize one judge response. Unknown stays unknown; prose stays invalid."""
+    text = _visible_answer(content)
+    extracted = _json_answer(text)
+    return normalize(bench, _explicit_token(bench, extracted if extracted is not None else text))
+
+
 def parse_response(bench, content, finish_reason):
     if finish_reason != 'stop':
         raise ValueError('nonterminal or truncated answer')
-    value = unique_json(content)
-    if not isinstance(value, dict) or set(value) != {'answer'}:
-        raise ValueError('answer JSON must have exactly one field')
-    return normalize(bench, value['answer'])
+    return interpret(bench, content)
 
 
 def dependency_graph(questions):

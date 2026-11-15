@@ -332,3 +332,53 @@ def test_geneval2_accepts_exact_plain_answer_without_guessing(monkeypatch, tmp_p
     result = scoring.score_t2i(row, image, source_root='unused')
     assert result['score'] == 100
     assert result['raw'] == ['1', 'yes']
+
+
+def test_explicit_answer_token_keeps_its_explanation():
+    from qwen_latent_cot.benchmarks.reference import t2i_protocols as protocol
+    assert protocol.interpret('spatial_geneval', '{"answer": "C: Green and felt"}') == 'C'
+    assert protocol.interpret('spatial_geneval', 'C') == 'C'
+    assert protocol.interpret('dsg', '{"answer": "Yes, there is a man sweeping sand."}') == 'yes'
+    assert protocol.interpret('tiif_bench', 'No — the rocks are in rough rows.') == 'no'
+    assert protocol.interpret('unigenbench', 'yes') == 'yes'
+    assert protocol.interpret('oneig_bench', '5') == '5'
+    assert protocol.interpret('genai_bench', '{"answer":"3"}  The cat is orange.') == '3'
+    assert protocol.interpret('geneval2', '{"answer": "unknown"}') is None
+
+
+def test_prose_without_a_leading_token_stays_invalid():
+    import pytest
+    from qwen_latent_cot.benchmarks.reference import t2i_protocols as protocol
+    for bench, text in (
+        ('spatial_geneval', 'A pile of scrap metal'),
+        ('geneval2', '{"answer": "There is one dog."}'),
+        ('dsg', 'The man appears to be yelling.'),
+        ('tiif_bench', 'Partially — one bottle looks metallic.'),
+    ):
+        with pytest.raises(ValueError):
+            protocol.interpret(bench, text)
+
+
+def test_dsg_explanation_scores_without_calling_the_judge_twice(monkeypatch, tmp_path):
+    from qwen_latent_cot.benchmarks import scoring
+    image = tmp_path / 'result.png'
+    Image.new('RGB', (2, 2)).save(image)
+    monkeypatch.setattr(scoring, 'call_judge', lambda *args, **kwargs: '{"answer": "Yes, there is a man."}')
+    row = {'benchmark': 'dsg', 'original_prompt': 'a man', 'evaluation_prompt': 'a man',
+           'native_dependency_state': 'parents_resolved',
+           'native_qa': [{'question': 'Is there a man?', 'expected_answer': 'yes',
+                          'proposition_id': '1', 'dependency_raw': '0'}]}
+    assert scoring.score_t2i(row, image, source_root='unused')['score'] == 100
+
+
+def test_imgedit_accepts_scores_written_on_one_line(monkeypatch, tmp_path):
+    from qwen_latent_cot.benchmarks import scoring
+    image = tmp_path / 'result.png'
+    Image.new('RGB', (2, 2)).save(image)
+    raw = ('Brief reasoning: wrong object. Prompt Compliance: 1 | Visual Naturalness: 2 | '
+           'Physical & Detail Integrity: 2')
+    monkeypatch.setattr(scoring, 'call_judge', lambda *args, **kwargs: raw)
+    row = {'suite': 'basic', 'task_type': 'replace', 'instruction': 'Replace the dog.'}
+    result = scoring.score_imgedit(row, image, image)
+    assert result['status'] == 'scored'
+    assert result['values'] == [1, 2, 2]

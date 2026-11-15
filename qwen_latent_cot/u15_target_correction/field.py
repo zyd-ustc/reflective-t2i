@@ -144,11 +144,87 @@ class NativeT2I:
         return self.rt.guided(positive, negative, float(self.cfg["cfg_scale"])).float()
 
 
-def edit_state(editor, anchor, time, prefixes, steps, base_prediction=None, grad=False):
+class TailT2I:
+    """Text-to-image CFG backed by the separately trained TailGenerator."""
+
+    def __init__(self, tail, raw, cfg):
+        self.tail, self.rt, self.cfg = tail, tail.rt, cfg
+        pos = self.rt.prefix(raw)
+        self.positive = (pos.cache, pos.indexes, None)
+        if float(cfg["cfg_scale"]) > 1:
+            neg = self.rt.prefix(None)
+            self.negative = (neg.cache, neg.indexes, None)
+        else:
+            self.negative = None
+        self.calls = 0
+
+    def __call__(self, z, t):
+        self.calls += 1
+        positive = self.tail.predict_velocity(z, t, self.positive).float()
+        lo, hi = [float(v) for v in self.cfg["cfg_interval"]]
+        if self.negative is None or not lo <= float(t) <= hi:
+            return positive
+        self.calls += 1
+        negative = self.tail.predict_velocity(z, t, self.negative).float()
+        return self.rt.guided(positive, negative, float(self.cfg["cfg_scale"])).float()
+
+
+def _edit_step_velocity(editor, state, time, progress, joint_prefix, empty_prefix, base, cfg_scale):
+    if float(cfg_scale) > 1.0:
+        return editor.guided_state_velocity(
+            state, float(time), progress, joint_prefix, empty_prefix, base, cfg_scale=cfg_scale
+        )
+    return editor.state_velocity(state, float(time), progress, joint_prefix, base)
+
+
+def _resolve_joint(prefixes, joint_prefix):
+    """Pick the conditional branch and refuse the empty prefix as that branch.
+
+    ``joint_prefix`` overrides ``prefixes["joint"]``; it never selects the
+    unconditional branch, which is always ``prefixes["empty"]``. Passing the
+    empty prefix here turns u_cfg = u_empty + w * (u_empty - u_empty) into a
+    plain unconditional step, silently dropping the edit instruction.
+    """
+    joint = prefixes["joint"] if joint_prefix is None else joint_prefix
+    empty = prefixes.get("empty", prefixes["image"])
+    if joint is empty:
+        raise ValueError(
+            "joint_prefix must not be the empty (unconditional) prefix: "
+            "the unconditional branch is already prefixes['empty']"
+        )
+    return joint, empty
+
+
+def rollout_prefix(editor, anchor, time, prefixes, target_step, total_steps,
+                   base_prediction=None, cfg_scale=1.0, joint_prefix=None):
+    """Run ``target_step`` detached editor Euler steps from ``anchor`` to obtain q_k."""
+    target_step = int(target_step)
+    total_steps = int(total_steps)
+    if target_step < 0 or target_step > total_steps:
+        raise ValueError("target_step must lie in [0, total_steps]")
+    state = anchor.float()
+    if base_prediction is None:
+        base = editor.image_clean(state, float(time), prefixes["image"])
+    else:
+        base = base_prediction.float()
+    if target_step == 0:
+        return state, base
+    joint, empty = _resolve_joint(prefixes, joint_prefix)
+    with torch.no_grad():
+        for index in range(target_step):
+            progress = index / total_steps
+            speed = _edit_step_velocity(
+                editor, state, time, progress, joint, empty, base, cfg_scale
+            )
+            state = state + speed / total_steps
+    return state, base
+
+
+def edit_state(editor, anchor, time, prefixes, steps, base_prediction=None, grad=False,
+               refresh_base=False, cfg_scale=1.0, joint_prefix=None):
     """Euler in s at fixed native time t. Returns the edited state and b0.
 
-    ``grad=True`` keeps the edit axis differentiable so a terminal image loss can
-    reach the editor through the frozen continuation. The default stays detached.
+    ``grad=True`` keeps the edit axis differentiable across all ``K`` steps.
     """
     steps = int(steps)
     if steps < 1:
@@ -158,16 +234,31 @@ def edit_state(editor, anchor, time, prefixes, steps, base_prediction=None, grad
         base = editor.image_clean(state, float(time), prefixes["image"])
     else:
         base = base_prediction.float()
+    joint, empty = _resolve_joint(prefixes, joint_prefix)
     if not grad:
         with torch.no_grad():
             for index in range(steps):
                 progress = index / steps
-                speed = editor.state_velocity(state, float(time), progress, prefixes["joint"], base)
+                # The velocity is measured against H0 at the anchor state by default,
+                # or re-anchored at the current state when refresh_base=True.
+                if refresh_base and index > 0:
+                    base = editor.image_clean(state, float(time), prefixes["image"])
+                speed = _edit_step_velocity(
+                    editor, state, time, progress, joint, empty, base, cfg_scale
+                )
                 state = state + speed / steps
         return state, base
+
+    use_ckpt = bool(getattr(editor, "config", {}).get("activation_checkpointing", False))
     for index in range(steps):
         progress = index / steps
-        speed = editor.state_velocity(state, float(time), progress, prefixes["joint"], base)
+
+        def step_fn(current, progress=progress):
+            return _edit_step_velocity(
+                editor, current, time, progress, joint, empty, base, cfg_scale
+            )
+
+        speed = checkpoint(step_fn, state, use_reentrant=False) if use_ckpt else step_fn(state)
         state = state + speed / steps
     return state, base
 

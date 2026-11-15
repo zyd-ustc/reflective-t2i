@@ -106,17 +106,22 @@ def score_t2i(row, image, source_root):
     if bench in protocol.BENCHES:
         questions = protocol.questions(row)
         answers, raw = [], []
+        hints = {
+            'geneval2': ' The answer field must contain exactly yes, no, unknown, or a single numeral from 0 to 9. Do not explain.',
+            'spatial_geneval': ' The answer field must contain exactly one letter: A, B, C, D, or E. Do not explain.',
+            'tiif_bench': ' The answer field must contain exactly yes, no, or unknown. Do not explain.',
+            'dsg': ' The answer field must contain exactly yes, no, or unknown. Do not explain.',
+            'unigenbench': ' The answer field must contain exactly yes, no, or unknown. Do not explain.',
+            'oneig_bench': ' The answer field must contain exactly 1, 2, 3, 4, 5, or unknown. Do not explain.',
+            'prism_bench': ' The answer field must contain exactly 1, 2, 3, 4, 5, or unknown. Do not explain.',
+            'genai_bench': ' The answer field must contain exactly 1, 2, 3, 4, 5, or unknown. Do not explain.',
+        }
         for item in questions:
-            system = item['system']
-            if bench == 'geneval2':
-                system += ' The answer field must contain exactly yes, no, unknown, or a single numeral from 0 to 9. Do not explain.'
+            system = item['system'] + hints.get(bench, '')
             response = call_judge(system, item['question'], [image_url(image)], max_tokens=256)
             raw.append(response)
             try:
-                if bench == 'geneval2' and re.fullmatch(r'\s*(?:yes|no|unknown|[0-9])\s*', response, re.I):
-                    answers.append(protocol.normalize(bench, response))
-                else:
-                    answers.append(protocol.parse_response(bench, response, 'stop'))
+                answers.append(protocol.interpret(bench, response))
             except ValueError:
                 answers.append(None)
         score = protocol.image_score(row, answers)
@@ -170,6 +175,19 @@ def score_t2i(row, image, source_root):
     return {'status': 'scored', 'score': score, 'answers': answers, 'raw': raw}
 
 
+def label_scores(raw, labels):
+    """Read each rubric label once, including labels written on one line."""
+    found = {}
+    plain = raw.replace('**', '')
+    for label in labels:
+        matches = re.findall(rf'(?i)(?<![A-Za-z]){re.escape(label)}\s*:\s*([1-5])\b', plain)
+        if len(matches) > 1:
+            raise ValueError('Judge repeated a rubric label')
+        if len(matches) == 1:
+            found[label] = int(matches[0])
+    return found
+
+
 def score_imgedit(row, source_image, image):
     suite = row['suite'].lower()
     if suite == 'basic':
@@ -187,14 +205,10 @@ def score_imgedit(row, source_image, image):
         raise ValueError('ImgEdit rubric labels differ from the frozen protocol')
     prompt = template.replace('<edit_prompt>', row['instruction'])
     raw = call_judge(system, prompt, [image_url(source_image), image_url(image)], max_tokens=1000)
-    found = {}
-    for line in raw.splitlines():
-        match = re.fullmatch(r'([^:]+):\s*([1-5])\s*\.?', line.strip().replace('**', ''))
-        if match and match.group(1).strip() in labels:
-            name = match.group(1).strip()
-            if name in found:
-                raise ValueError('Judge repeated a rubric label')
-            found[name] = int(match.group(2))
+    try:
+        found = label_scores(raw, labels)
+    except ValueError:
+        return {'status': 'unknown', 'score': None, 'raw': raw, 'labels': labels}
     if set(found) != set(labels):
         return {'status': 'unknown', 'score': None, 'raw': raw, 'labels': labels}
     values = [found[label] for label in labels]

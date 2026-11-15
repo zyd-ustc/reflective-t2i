@@ -25,6 +25,22 @@ def rank():
 def world_size():
     return dist.get_world_size() if dist.is_initialized() else 1
 
+def sum_int(value, device=None):
+    """Sum an integer scalar across all ranks of the active process group."""
+    if not dist.is_initialized() or world_size() == 1:
+        return int(value)
+    if device is None:
+        backend = dist.get_backend()
+        if backend == 'hccl':
+            device = f'npu:{torch.npu.current_device()}'
+        elif backend == 'nccl':
+            device = f'cuda:{torch.cuda.current_device()}'
+        else:
+            device = 'cpu'
+    tensor = torch.tensor([int(value)], dtype=torch.int64, device=device)
+    dist.all_reduce(tensor, op=dist.ReduceOp.SUM)
+    return int(tensor.item())
+
 def barrier():
     if dist.is_initialized():
         dist.barrier()

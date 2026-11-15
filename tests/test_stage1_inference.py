@@ -33,10 +33,43 @@ def test_source_image_uses_stage1_linear_noising(monkeypatch):
     cfg = {'read_time': 0.36, 'edit_steps': 8}
     images, edited, record = inference.edit_image(rt, None, cfg, 'source.png', 'blue', 9)
     generator = torch.Generator().manual_seed(9)
-    expected = 0.36 * source + 0.64 * 2 * torch.randn(source.shape, generator=generator) + 1
-    assert torch.equal(edited, expected)
-    assert torch.equal(images['result'], expected)
+    noised = 0.36 * source + 0.64 * 2 * torch.randn(source.shape, generator=generator)
+    assert torch.equal(images['baseline'], noised)
+    assert torch.equal(edited, noised + 1)
+    assert torch.equal(images['result'], noised + 1)
     assert record['instruction'] == 'blue'
+    assert record['baseline'] == 'noised source continued without the state transformer'
+
+
+def test_edit_pair_applies_both_editors_to_one_noised_state(monkeypatch):
+    import torch
+    from types import SimpleNamespace
+    from qwen_latent_cot.u15_target_correction import inference
+
+    source = torch.full((1, 3, 2, 2), 0.5)
+    rt = SimpleNamespace(width=2, height=2, device=torch.device('cpu'), noise_scale=lambda: 2)
+    seen = []
+    trained = {'on': False}
+    monkeypatch.setattr(inference, 'load_canvas', lambda *args: (source, None, None))
+    def edit(editor, state, time, instruction, steps):
+        seen.append(state.clone())
+        return state + (2 if trained['on'] else 1)
+    monkeypatch.setattr(inference, '_edit', edit)
+    monkeypatch.setattr(inference, 'phase_grid', lambda *args: [0, 0.36, 1])
+    monkeypatch.setattr(inference, 'NativeT2I', lambda *args: None)
+    monkeypatch.setattr(inference, 'preview_image', lambda state, *args: state)
+    monkeypatch.setattr(inference, 'euler', lambda state, *args: state.clone())
+    cfg = {'read_time': 0.36, 'edit_steps': 8}
+    def load():
+        trained['on'] = True
+        return {'step': 14723}
+    images, states, record = inference.edit_pair(rt, None, cfg, 'source.png', 'blue', 9, load_trained=load)
+    assert torch.equal(seen[0], seen[1])
+    assert torch.equal(images['baseline'], seen[0])
+    assert torch.equal(images['native_result'], seen[0] + 1)
+    assert torch.equal(images['result'], seen[0] + 2)
+    assert record['loaded_checkpoint_step'] == 14723
+    assert states['native_result'] is not states['result']
 
 
 def test_t2i_reflection_controls_edit_and_retains_decision(monkeypatch):
@@ -78,7 +111,9 @@ def test_stage1_config_matches_checkpoint_recipe():
     cfg = load_config('configs/u15_isochronic_state/stage1_full490k.json')
     assert cfg['condition_protocol'] == 'isochronic_condition_v2'
     assert cfg['state_times'] == [0.36]
-    assert stage_updates(471112, cfg, 64) == 14723
+    # The budget now counts traversals of the training set, not a legacy step cap.
+    assert cfg.get('max_steps') is None
+    assert stage_updates(471112, cfg, 64) == int(cfg['epochs']) * 7362
 
 
 def test_und_generation_passes_pixels_with_visual_features(monkeypatch):
@@ -125,12 +160,13 @@ def test_stage1_sampler_replays_after_restoring_state():
     import random
     from qwen_latent_cot.u15_target_correction.data import TrainingSampler
     class Pool:
+        train_indices = [0, 1, 2]
+        rows = [0, 1, 2]
         count = 3
         def role_pools(self): return {'L_edit': self}
         def choose_time(self, rng, time=None): return rng.random()
-        def choose_index(self, time, rng): return rng.randrange(3)
         def sample(self, index, time, keep=False): return {'uid': index, 'time': time}
-    cfg = {'seed': 17, 'role_weights': {'L_edit': 1.0}}
+    cfg = {'seed': 17}
     first = TrainingSampler(Pool(), cfg)
     first.draw()
     saved = first.state_dict()

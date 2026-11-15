@@ -32,7 +32,8 @@ def parser():
     score.add_argument('--manifest', required=True)
     score.add_argument('--record-id', required=True)
     score.add_argument('--generation', required=True)
-    score.add_argument('--arm', choices=('baseline', 'native_result', 'result'), default='result')
+    score.add_argument('--arm', choices=('baseline', 'native_result', 'result', 'official'), default='result',
+                       help='Edit baseline continues the noised source; official is source-conditioned it2i')
     score.add_argument('--output', required=True)
     score.add_argument('--source-root', default=DEFAULT_SCORER)
     score.add_argument('--source-image', help='Verified local copy of the frozen edit source')
@@ -53,7 +54,7 @@ def generate(args):
     from qwen_latent_cot.u15_target_correction.cli import _load_editor
     from qwen_latent_cot.u15_target_correction.config import load_config
     from qwen_latent_cot.u15_target_correction.images import save_image
-    from qwen_latent_cot.u15_target_correction.inference import edit_image
+    from qwen_latent_cot.u15_target_correction.inference import edit_pair
     from qwen_latent_cot.u15_target_correction.loading import load_native
     from .generate import letterbox, t2i_pair
 
@@ -81,21 +82,21 @@ def generate(args):
         with Image.open(case.source_image) as source:
             original_size = source.size
             letterbox(source, rt.width, rt.height).save(output / 'source_canvas.png')
+        images, states, info = edit_pair(
+            rt, editor, cfg, output / 'source_canvas.png', case.prompt, case.seed,
+            load_trained=load_trained if args.checkpoint_mode == 'both' else None)
         if args.checkpoint_mode == 'both':
-            native_images, native_state, _ = edit_image(rt, editor, cfg, output / 'source_canvas.png', case.prompt, case.seed)
-            meta = load_trained()
-        images, state, info = edit_image(rt, editor, cfg, output / 'source_canvas.png', case.prompt, case.seed)
-        if args.checkpoint_mode == 'both':
-            images['native_result'] = native_images['result']
+            meta = {'step': info.get('loaded_checkpoint_step')}
         import torch
-        torch.save(state.detach().float().cpu(), output / 'edited_state.pt')
-        if args.checkpoint_mode == 'both':
-            torch.save(native_state.detach().float().cpu(), output / 'native_edited_state.pt')
+        torch.save(states['result'].detach().float().cpu(), output / 'edited_state.pt')
+        if states.get('native_result') is not None:
+            torch.save(states['native_result'].detach().float().cpu(), output / 'native_edited_state.pt')
         info['source_size'] = list(original_size)
     for name, image in images.items():
-        save_image(output / (name + ( '_canvas.png' if case.kind == 'edit' and name in ('result', 'native_result') else '.png')), image)
+        canvas = case.kind == 'edit' and name in ('result', 'native_result', 'baseline')
+        save_image(output / (name + ('_canvas.png' if canvas else '.png')), image)
     if case.kind == 'edit':
-        for name in ('result', 'native_result'):
+        for name in ('result', 'native_result', 'baseline'):
             if (output / (name + '_canvas.png')).exists():
                 with Image.open(output / (name + '_canvas.png')) as canvas:
                     restore_geometry(canvas, original_size).save(output / (name + '.png'))
@@ -125,8 +126,6 @@ def score(args):
                     original_prompt=case.prompt, seed=case.seed)
     if any(record.get(k) != v for k, v in expected.items()):
         raise ValueError('generation record does not match the frozen case')
-    if case.kind == 'edit' and args.arm == 'baseline':
-        raise ValueError('The editing benchmark has no unedited generation arm')
     image = generation / (args.arm + '.png')
     if not image.is_file():
         raise FileNotFoundError(image)

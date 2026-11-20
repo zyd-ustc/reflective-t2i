@@ -1,4 +1,4 @@
-"""Launch Stage 1/2 training on four 16-chip ModelArts workers."""
+"""Launch unified isochronic manifold training on four 16-chip ModelArts workers."""
 
 import argparse
 import json
@@ -40,8 +40,8 @@ def _ssh_command(host, command):
     ]
 
 
-def _preflight(hosts, output):
-    if output.exists():
+def _preflight(hosts, output, resuming=False):
+    if output.exists() and not resuming:
         raise ValueError("Output directory already exists: " + str(output))
     for index, host in enumerate(hosts):
         command = _remote(
@@ -62,14 +62,10 @@ def main():
     parser.add_argument("--linear", nargs="+", required=True)
     parser.add_argument("--resume")
     parser.add_argument("--init-checkpoint")
-    parser.add_argument("--tail-editor-checkpoint")
-    parser.add_argument("--tail-editor-config")
-    parser.add_argument("--target-captions", nargs="+",
-                        help="JSONL files mapping uid -> target caption for the tail condition")
     parser.add_argument("--output", required=True)
     parser.add_argument("--steps", type=int)
     parser.add_argument("--master-port", type=int, default=30041)
-    parser.add_argument("--config", help="Stage configuration; defaults to the single-point 0.36 recipe")
+    parser.add_argument("--config", help="Configuration; defaults to isochronic_manifold.json")
     parser.add_argument("--code", default=str(CODE))
     parser.add_argument("--python", default=PY)
     parser.add_argument("--dry-run", action="store_true")
@@ -79,16 +75,16 @@ def main():
     hosts = _hosts()
     output = Path(args.output).resolve()
     log_dir = output.with_name(output.name + "_logs")
-    default_cfg = "stage1_full490k.json"
+    default_cfg = "isochronic_manifold.json"
     from qwen_latent_cot.u15_target_correction.config import load_config
-
-    stage_cfg = Path(args.config).resolve() if args.config else Path(args.code).resolve() / "configs/u15_isochronic_state" / default_cfg
-    cfg = load_config(stage_cfg)
-    if int(cfg["stage"]) not in (1, 2):
-        parser.error("Stage 1 or Stage 2 configuration is required")
-
-    # The 64-chip job would otherwise fail only after every rank loads weights.
     from qwen_latent_cot.u15_target_correction.checkpoint import geometry_gate
+
+    stage_cfg = (
+        Path(args.config).resolve()
+        if args.config
+        else Path(args.code).resolve() / "configs/u15_isochronic_state" / default_cfg
+    )
+    load_config(stage_cfg)
 
     def _gate(path, label):
         manifest = Path(path).resolve() / "manifest.json"
@@ -100,11 +96,7 @@ def main():
         except ValueError as error:
             parser.error(f"{label}: {error}")
 
-    for path, label in (
-        (getattr(args, "resume", None), "--resume"),
-        (args.init_checkpoint, "--init-checkpoint"),
-        (args.tail_editor_checkpoint, "--tail-editor-checkpoint"),
-    ):
+    for path, label in ((getattr(args, "resume", None), "--resume"), (args.init_checkpoint, "--init-checkpoint")):
         if path:
             _gate(path, label)
 
@@ -115,14 +107,11 @@ def main():
         HCCL_NPU_SOCKET_PORT_RANGE="auto",
         HCCL_IF_BASE_PORT="64720",
         HCCL_CONNECT_TIMEOUT="3600",
-        # A storage fault once left one node waiting a full hour while the other
-        # three had already died. Fail fast so a restart is not raced by zombies.
         HCCL_EXEC_TIMEOUT="600",
         OMP_NUM_THREADS="1",
         TOKENIZERS_PARALLELISM="false",
         PYTORCH_NPU_ALLOC_CONF="expandable_segments:True",
     )
-    # Credentials stay in ~/.netrc; only non-secret tracking settings are passed.
     for key in (
         "WANDB_PROJECT", "WANDB_ENTITY", "WANDB_MODE", "WANDB_DIR",
         "WANDB_RUN_NAME", "WANDB_TAGS", "WANDB_BASE_URL",
@@ -146,19 +135,12 @@ def main():
             "--model", MODEL, "--source", SOURCE,
             "--config", str(stage_cfg),
             "--output", str(output),
+            "--linear", *args.linear,
         ]
-        if args.linear:
-            command += ["--linear", *args.linear]
         if args.resume:
             command += ["--resume", args.resume]
         if args.init_checkpoint:
             command += ["--init-checkpoint", args.init_checkpoint]
-        if args.tail_editor_checkpoint:
-            command += ["--tail-editor-checkpoint", args.tail_editor_checkpoint]
-        if args.tail_editor_config:
-            command += ["--tail-editor-config", args.tail_editor_config]
-        if args.target_captions:
-            command += ["--target-captions", *args.target_captions]
         if args.steps:
             command += ["--steps", str(args.steps)]
         log = log_dir / f"node{index}.log"
@@ -166,34 +148,21 @@ def main():
         helper_command = [
             args.python, str(helper), "--log", str(log), "--pid-file", str(pid_file), "--", *command,
         ]
-        shell = (
-            f"cd {shlex.quote(str(code))}; env {env_text} "
-            f"{shlex.join(helper_command)}"
-        )
+        shell = f"cd {shlex.quote(str(code))}; env {env_text} {shlex.join(helper_command)}"
         launches.append(
-            dict(
-                node=index,
-                host=host,
-                log=str(log),
-                pid_file=str(pid_file),
-                command=helper_command,
-                shell=shell,
-            )
+            dict(node=index, host=host, log=str(log), pid_file=str(pid_file), command=helper_command, shell=shell)
         )
 
     print(json.dumps(dict(output=str(output), log_dir=str(log_dir), launches=launches), indent=2))
     if args.dry_run:
         return
     if not args.skip_preflight:
-        _preflight(hosts, output)
+        _preflight(hosts, output, resuming=bool(args.resume))
     log_dir.mkdir(parents=True, exist_ok=True)
     pids = []
     for item in launches:
         Path(item["pid_file"]).unlink(missing_ok=True)
-        if item["node"] == 0:
-            command = ["bash", "-lc", item["shell"]]
-        else:
-            command = _ssh_command(item["host"], item["shell"])
+        command = ["bash", "-lc", item["shell"]] if item["node"] == 0 else _ssh_command(item["host"], item["shell"])
         subprocess.Popen(
             command,
             stdin=subprocess.DEVNULL,
@@ -207,8 +176,7 @@ def main():
             time.sleep(0.5)
         if not pid_path.exists():
             raise RuntimeError(f"Node {item['node']} did not write a PID file")
-        pid = pid_path.read_text().strip()
-        pids.append(dict(node=item["node"], host=item["host"], pid=pid, log=item["log"]))
+        pids.append(dict(node=item["node"], host=item["host"], pid=pid_path.read_text().strip(), log=item["log"]))
     (log_dir / "pids.json").write_text(json.dumps(pids, indent=2) + "\n")
     print(json.dumps(dict(launched=pids), indent=2))
 

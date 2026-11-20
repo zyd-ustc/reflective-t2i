@@ -1,0 +1,5 @@
+{
+  "extends": "base.json",
+  "limit": 200,
+  "out": "/data/zyd_workspace/isochronic_data_20261107/count_spatial_20261115/glm53_trial200_20261118"
+}

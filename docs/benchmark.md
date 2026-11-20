@@ -37,8 +37,8 @@
 CODE=/data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU
 MODEL=/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT
 SOURCE=/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b
-CKPT=/data/zyd_workspace/isochronic_data_20261107/train_full490k/step_014723
-CONFIG=$CODE/configs/u15_isochronic_state/stage1_full490k.json
+CKPT=/data/zyd_workspace/isochronic_data_20261107/isochronic_manifold_400k_20261119/step_006001
+CONFIG=$CODE/configs/u15_isochronic_state/isochronic_manifold.json
 ENV_FILE=$CODE/.env
 PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
 cd "$CODE"
@@ -71,6 +71,8 @@ cd "$CODE"
 如果生成机器不能访问清单中的源图，可先复制**该题源图**，再加 `--source-image /path/to/copy.png`。程序校验副本与清单的 `source_sha256` 一致。文生图不使用清单里的历史图像路径。
 
 两种生成均可用 `--checkpoint-mode native` 代替 `trained`，并省略 `--checkpoint`。这是未加载检查点但仍执行编辑的对照，不是官方原生图像编辑，也不是不编辑直接出图。使用 `--checkpoint-mode both --checkpoint "$CKPT"` 时，同一加噪中间状态产生三张图：`baseline.png` 不经过转换器直接续生，`native_result.png` 走未加载检查点的转换，`result.png` 走已加载检查点的转换。文生图的三组共享原始状态和同一份 UND 反馈。
+
+三种模式均复用 `inference.edit_pair` / `edit_state` 入口，对应统一架构 `isochronic_manifold_v1`（配置中的尾段 `cfg_interval: [0.0, 0.8]` 会随生成结果记录在 `case.json`）。如需在 64 卡上运行全量配对闭环评测（`GenEval`、`GenEval++`、`GenEval2`、`T2I-CompBench++`），请使用 `scripts/bench_t2i_closed_loop64.py`（见 [推理指南](inference.md)）。
 
 ## 评分一题
 

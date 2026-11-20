@@ -1,0 +1,33 @@
+{
+  "index_csv": "/data/250010019/unimoe_r3/qwen_image_vllm_20261019/dataset/index.csv",
+  "out": "/data/zyd_workspace/isochronic_data_20261107/count_spatial_20261115/trial_000",
+  "limit": 200,
+  "seed": 2026,
+  "family_weights": {
+    "count_reduce": 0.4,
+    "count_increase": 0.4,
+    "spatial": 0.2
+  },
+  "vlm_kind": "glm",
+  "vlm_url": "https://metto-api.com/v1/chat/completions",
+  "vlm_model": "glm-5.3-flash",
+  "vlm_key_env": "METTO_GLM_KEY",
+  "allow_hosted_verify": true,
+  "strict_preservation": false,
+  "verification_mode": "pair",
+  "max_tokens": 4096,
+  "workers": 16,
+  "retries": 3,
+  "timeout": 180,
+  "editor": {
+    "base_url": "http://127.0.0.1:8091",
+    "model": "Qwen/Qwen-Image-2.1",
+    "steps": 28,
+    "cfg_scale": 1.0,
+    "seed": 42,
+    "timeout": 300,
+    "workers": 1
+  },
+  "config": "configs/u15_isochronic_state/isochronic_manifold.json",
+  "shard_size": 500
+}

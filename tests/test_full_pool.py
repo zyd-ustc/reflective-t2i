@@ -113,12 +113,10 @@ def test_shipped_configs_drop_task_weights_and_use_epochs():
     from qwen_latent_cot.u15_target_correction.config import load_config
 
     directory = Path(__file__).resolve().parent.parent / "configs/u15_isochronic_state"
-    for name in ("stage1_full490k.json", "editor_v2_rollout_lora.json",
-                 "editor_v2_rollout_gen_full.json", "tail_v1_lora.json"):
-        cfg = load_config(directory / name)
-        assert "task_weights" not in cfg, name
-        assert "max_steps" not in cfg, name
-        assert int(cfg["epochs"]) >= 1, name
+    cfg = load_config(directory / "isochronic_manifold.json")
+    assert "task_weights" not in cfg
+    assert "max_steps" not in cfg
+    assert int(cfg["epochs"]) >= 1
 
 
 def test_family_split_never_crosses_a_boundary():
@@ -261,38 +259,6 @@ def test_single_shard_count_is_not_used_as_the_budget_denominator(tmp_path):
     budget = stage_updates(total, _cfg(global_batch=64, epochs=2), global_batch=64)
     assert budget > 400_000
     assert budget != 7268
-
-
-def test_tail_manifest_and_sampler_shards_cover_global_order_once(tmp_path):
-    """Each rank reads only its tail stride and draws distinct records across ranks."""
-    from PIL import Image
-
-    from qwen_latent_cot.u15_target_correction.data import TailManifest, TailSampler
-
-    class _RT:
-        width = height = 16
-        device = "cpu"
-
-    image = tmp_path / "t.png"
-    Image.new("RGB", (16, 16)).save(image)
-    rows = [
-        dict(uid=f"t{i}", split="train", target_image=str(image), tail_condition=f"cat {i}")
-        for i in range(12)
-    ]
-    manifest_path = tmp_path / "tail.jsonl"
-    manifest_path.write_text("".join(json.dumps(r) + "\n" for r in rows))
-
-    cfg = _cfg()
-    seen_indices = []
-    drawn_uids = []
-    for rank in range(4):
-        shard = TailManifest(manifest_path, _RT(), cfg, rank=rank, world=4)
-        assert shard.count == 3
-        seen_indices.extend(row["global_index"] for row in shard.rows)
-        sampler = TailSampler(shard, cfg, rank=rank, world=4)
-        drawn_uids.extend(sampler.draw()["uid"] for _ in range(3))
-    assert sorted(seen_indices) == list(range(12))
-    assert sorted(drawn_uids) == sorted(f"t{i}" for i in range(12))
 
 
 def test_global_train_records_without_pre_split_sums_stride_ranks(tmp_path):

@@ -92,8 +92,8 @@ def test_legacy_geometry_requires_an_explicit_opt_in(monkeypatch):
 
 
 def _tiny_editor(rt, cfg):
-    from qwen_latent_cot.u15_target_correction.model import StateEditor
-    return StateEditor(rt, cfg).train()
+    from qwen_latent_cot.u15_target_correction.model import IsochronicManifoldEditor
+    return IsochronicManifoldEditor(rt, cfg).train()
 
 
 def test_checkpoint_records_geometry_and_reloads_under_it(tmp_path):
@@ -105,13 +105,13 @@ def test_checkpoint_records_geometry_and_reloads_under_it(tmp_path):
         load_init_weights,
         save,
     )
-    from tests.test_v2_training import _DummyRuntime, _make_v2_cfg
+    from tests.test_isochronic_manifold import DummyRuntime, make_cfg
 
-    rt, cfg = _DummyRuntime(), _make_v2_cfg()
+    rt, cfg = DummyRuntime(), make_cfg(width=16, height=16, lora_rank=4, activation_checkpointing=False)
     editor = _tiny_editor(rt, cfg)
     opt = torch.optim.AdamW(canonical_parameters(editor).values(), lr=1e-4)
     sampler = SimpleNamespace(state_dict=lambda: {}, load_state_dict=lambda s: None)
-    identity = editor_identity(rt, cfg, component="editor")
+    identity = editor_identity(rt, cfg)
     assert identity["geometry"] == CURRENT_GEOMETRY_PROTOCOL
 
     ckpt = tmp_path / "stage1"

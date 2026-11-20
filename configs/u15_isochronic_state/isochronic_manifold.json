@@ -1,0 +1,37 @@
+{
+  "extends": "core.json",
+  "stage": 1,
+  "editor_interface": "isochronic_manifold_v1",
+  "parameterization": "gen_lora",
+  "lora_rank": 64,
+  "read_time": 0.36,
+  "stop_time": 0.60,
+  "train_max_time": 0.60,
+  "bridge_endpoint_time": 1.0,
+  "bridge_start_prob": 0.15,
+  "noise_refresh": 0.0,
+  "edit_prompt_dropout": 0.10,
+  "edit_cfg_scale": 1.0,
+  "lookahead_steps": 4,
+  "recheck_add_on_preview": true,
+  "gate_contradictory_edits": true,
+  "cfg_interval": [
+    0.0,
+    0.8
+  ],
+  "lr": 0.00003,
+  "lr_final": 0.000005,
+  "warmup_steps": 200,
+  "epochs": 1,
+  "betas": [
+    0.9,
+    0.95
+  ],
+  "eps": 1e-8,
+  "weight_decay": 0.0,
+  "gradient_clip": 1.0,
+  "global_batch": 64,
+  "save_every": 500,
+  "keep_checkpoints": 4,
+  "seed": 31
+}

@@ -11,44 +11,21 @@
   "cfg_norm": "none",
   "cfg_interval": [
     0.0,
-    1.0
+    0.8
   ],
   "read_time": 0.36,
-  "state_times": [
-    0.15,
-    0.25,
-    0.36,
-    0.5
-  ],
-  "state_time_probs": [
-    0.2,
-    0.25,
-    0.35,
-    0.2
-  ],
-  "edit_steps": 8,
-  "lookahead_steps": 2,
+  "stop_time": 0.60,
+  "lookahead_steps": 4,
+  "recheck_add_on_preview": true,
+  "gate_contradictory_edits": true,
   "lora_rank": 64,
   "activation_checkpointing": true,
-  "condition_protocol": "isochronic_condition_v2",
-  "allow_derived_tail": false,
-  "keep_instruction": "Keep the current scene unchanged.",
-  "keep_fraction": 0.1,
-  "pass_threshold": 0.65,
+  "condition_protocol": "semantic_feedback_only_v1",
   "und_max_new_tokens": 256,
+  "describe_max_new_tokens": 320,
+  "judge_max_new_tokens": 320,
   "global_batch": 64,
   "gradient_clip": 1.0,
-  "save_every": 250,
-  "seed": 17,
-  "inversion": {
-    "substeps": 1,
-    "iterations": 6,
-    "damping": 0.6,
-    "max_residual": 0.02,
-    "source_l1_max": 0.08,
-    "target_l1_max": 0.08,
-    "target_lpips_max": 0.2,
-    "solver": "reverse_heun",
-    "margin_fraction": 0.0
-  }
+  "save_every": 500,
+  "seed": 31
 }

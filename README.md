@@ -1,66 +1,41 @@
-# Stage 1 等时状态编辑
+# Isochronic Manifold T2I Self-Feedback (`isochronic_manifold_v1`)
 
-本项目保留 SenseNova-U1.5 的 Stage 1 训练，以及两种推理：源图编辑和 UND 自反馈文生图。目标检查点是 `train_full490k/step_014723`，条件协议为 `isochronic_condition_v2`：编辑器读取中间态和短编辑指令，不读取预览图或目标描述。
+本项目面向统一多模态生成模型（`SenseNova-U1.5-8B-MoT`）及纯文生图自反馈闭环场景，实现**严格等时流形跳转算子（Strict Isochronic Manifold Transition Operator）**与**多步显影审图门控**。
 
-## 准备
+核心思路：在原生 T2I 生成轨迹的早期关键时刻 $t_0 = 0.36$ 暂停，通过 4 步子网格显影预览触发自反思审图与零偏置门控；当需要修改时，编辑器仅接收带噪状态和纯文本编辑指令 `Edit request: <feedback>`，在短程语义成型窗口 $\tau \in [0.36, 0.60]$ 内预测干净目标估计，并**严格等时回投至同一时刻 $t_0 = 0.36$ 的原生噪声流形** $\hat{z}_{0.36}$，再交还给冻结原生 T2I 底座精修 $\tau \in [0.36, 1.0]$ 的高频细节与次要约束。
 
-在已安装 PyTorch 和 `torch_npu` 的 Ascend 环境中执行：
+## 准备与环境
+
+在已安装 PyTorch 与 `torch_npu` 的 Ascend 环境中执行：
 
 ```bash
 pip install -e .
 ```
 
-以下示例在 `modelarts-64` 上执行。`MODEL` 是原生 SenseNova 权重，`SOURCE` 是带 NPU 适配的 SenseNova 源码，`CKPT` 是训练得到的编辑器权重。它们不属于本仓库。
+`modelarts-64b` 默认路径（权重、源码与训练产物均独立存放在代码仓库之外）：
 
 ```bash
+PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
 MODEL=/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT
 SOURCE=/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b
-CKPT=/data/zyd_workspace/isochronic_data_20261107/train_full490k/step_014723
-CONFIG=configs/u15_isochronic_state/stage1_full490k.json
+CONFIG=configs/u15_isochronic_state/isochronic_manifold.json
+CKPT=/data/zyd_workspace/isochronic_data_20261107/isochronic_manifold_400k_20261119/step_006001
 ```
 
-## 编辑源图
+## 快速入口
 
-```bash
-u15-target-correction edit --model "$MODEL" --source "$SOURCE" --config "$CONFIG" \
-  --image /path/to/source.png --instruction 'Make the dog blue.' \
-  --checkpoint-mode trained --checkpoint "$CKPT" --output /path/to/new-output
-```
-
-程序按训练方法将源图与噪声线性混合至 `t=0.36`，在固定 `t` 下编辑，然后用无条件原生 T2I 接续至终图。这不是对源图的数值反演。输出目录必须不存在，结果包括 `edited_state.pt`、`edited_preview.png`、`result.png` 和 `result.json`。
-
-若要使用未训练的编辑器作为对照，将最后一行替换为：
-
-```bash
-  --checkpoint-mode native --output /path/to/new-output
-```
-
-`native` 不加载训练检查点：LoRA 更新和编辑进度嵌入为零初始化，但程序仍执行指令条件编辑。它不是训练后效果，也不保证编辑成功。
-
-## UND 自反馈文生图
-
-```bash
-u15-target-correction t2i --model "$MODEL" --source "$SOURCE" --config "$CONFIG" \
-  --prompt 'a lion beside seven zebras' \
-  --checkpoint-mode trained --checkpoint "$CKPT" --output /path/to/new-output
-```
-
-要不加载检查点，同样使用 `--checkpoint-mode native`，并省略 `--checkpoint`。程序先生成 `t=0.36` 的状态和预览，再让 UND 按顺序描述图像、判断是否满足提示词、写出一条修改指令。UND 判定已满足时，程序直接接续；判定需要修改时，程序编辑状态并接续。解析失败时，程序报错而不是静默判定已满足。输出包含 `preview.png`、`result.png` 和记录完整反馈的 `result.json`；发生编辑时还包含编辑后的中间态和预览。
-
-视觉特征已接入 UND 生成路径。UND 仍可能数错物体或误判关系，不应将反馈当作独立真值。
-
-## 训练 Stage 1
-
-全量数据清单为 `/data/zyd_workspace/isochronic_data_20261107/linear_nocaption/L_full_490k.json`。模型训练使用 64 卡、全局批次 64、单点 `t=0.36`，最多 14,723 步。下面的启动器从当前 ModelArts 作业的四个节点启动训练：
-
-```bash
-python scripts/launch_train64.py \
-  --linear /data/zyd_workspace/isochronic_data_20261107/linear_nocaption/L_full_490k.json \
-  --config "$CONFIG" --output /path/to/new-training-output
-```
-
-使用 `--resume /path/to/step` 恢复同一配置、数据清单、步数和 64 卡规模的训练。训练输出、数据、模型和现有检查点均在代码目录之外。
-
-## 评测
-
-文生图与编辑榜的冻结清单、单题生成和评分方法见 [评测指南](docs/benchmark.md)。
+- **推理与文生图自反馈闭环**（见 [推理指南](docs/inference.md)）：
+  ```bash
+  "$PY" -m qwen_latent_cot.u15_target_correction.cli t2i \
+    --model "$MODEL" --source "$SOURCE" --config "$CONFIG" \
+    --prompt "a lion beside seven zebras" \
+    --checkpoint-mode trained --checkpoint "$CKPT" --output /path/to/out
+  ```
+- **64 卡训练**（见 [训练指南](docs/train.md)）：
+  ```bash
+  "$PY" scripts/launch_train64.py \
+    --linear /data/zyd_workspace/isochronic_data_20261107/prod_1m_glm53_20261118/final_manifests/manifest_*.jsonl \
+    --config "$CONFIG" --output /path/to/new-training-output
+  ```
+- **数据构建与核验**（见 [数据指南](docs/data.md)）：支持 64 卡 `Qwen-Image-2.1` 反向合成计数/空间样本与多进程 `GLM-5.3-flash` 语义任务覆盖清洗。
+- **评测体系**（见 [评测指南](docs/benchmark.md)）：支持 `GenEval`、`GenEval++`、`GenEval2`、`T2I-CompBench++` 64 卡全量闭环生成与独立 `Qwen3-VL-8B-Instruct` 判分，以及单题调试评测。

@@ -1,4 +1,4 @@
-"""Train the Stage 1/2 editor or tail generator, or run image editing and T2I feedback."""
+"""CLI for training and running the strict isochronic manifold-transition operator."""
 
 import argparse
 import json
@@ -8,66 +8,50 @@ from .config import load_config
 
 
 def _model_args(parser):
-    parser.add_argument('--model', required=True)
-    parser.add_argument('--source', required=True)
-    parser.add_argument('--config', required=True)
-    parser.add_argument('--device', default='npu:0')
-    parser.add_argument('--distributed', action='store_true')
+    parser.add_argument("--model", required=True)
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--config", required=True)
+    parser.add_argument("--device", default="npu:0")
+    parser.add_argument("--distributed", action="store_true")
 
 
 def _parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest='command', required=True)
-    train = commands.add_parser('train')
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    train = commands.add_parser("train")
     _model_args(train)
-    train.add_argument('--linear', nargs='+', required=True)
-    train.add_argument('--output', required=True)
-    train.add_argument('--resume')
-    train.add_argument('--init-checkpoint')
-    train.add_argument('--tail-editor-checkpoint')
-    train.add_argument('--tail-editor-config')
-    train.add_argument('--target-captions', nargs='+',
-                       help='JSONL files mapping uid -> target caption for the tail condition')
-    train.add_argument('--steps', type=int)
-    for name in ('edit', 't2i'):
+    train.add_argument("--linear", nargs="+", required=True)
+    train.add_argument("--output", required=True)
+    train.add_argument("--resume")
+    train.add_argument("--init-checkpoint")
+    train.add_argument("--steps", type=int)
+
+    for name in ("edit", "t2i"):
         command = commands.add_parser(name)
         _model_args(command)
-        command.add_argument('--output', required=True)
-        command.add_argument('--seed', type=int, default=17)
-        command.add_argument('--checkpoint-mode', choices=('trained', 'native'), required=True)
-        command.add_argument('--checkpoint')
-        command.add_argument('--edit-cfg-scale', type=float, default=None)
-        command.add_argument('--tail-checkpoint')
-        command.add_argument('--tail-config')
-        if name == 'edit':
-            command.add_argument('--image', required=True)
-            command.add_argument('--instruction', required=True)
+        command.add_argument("--output", required=True)
+        command.add_argument("--seed", type=int, default=17)
+        command.add_argument("--checkpoint-mode", choices=("trained", "native"), required=True)
+        command.add_argument("--checkpoint")
+        command.add_argument("--edit-cfg-scale", type=float, default=None)
+        if name == "edit":
+            command.add_argument("--image", required=True)
+            command.add_argument("--instruction", required=True)
         else:
-            command.add_argument('--prompt', required=True)
+            command.add_argument("--prompt", required=True)
     return parser
 
 
 def _load_editor(rt, cfg, mode, checkpoint):
     from .checkpoint import editor_identity, load_stage_weights
-    from .model import StateEditor
+    from .model import build_editor
 
-    if (mode == 'trained') != bool(checkpoint):
-        raise ValueError('trained mode requires --checkpoint; native mode must omit it')
-    editor = StateEditor(rt, cfg).eval()
-    meta = load_stage_weights(checkpoint, editor, editor_identity(rt, cfg, component='editor')) if checkpoint else None
+    if (mode == "trained") != bool(checkpoint):
+        raise ValueError("trained mode requires --checkpoint; native mode must omit it")
+    editor = build_editor(rt, cfg).eval()
+    meta = load_stage_weights(checkpoint, editor, editor_identity(rt, cfg)) if checkpoint else None
     return editor, meta
-
-
-def _load_tail(rt, cfg, tail_checkpoint, tail_config=None):
-    if not tail_checkpoint:
-        return None
-    from .checkpoint import editor_identity, load_stage_weights
-    from .model import TailGenerator
-
-    tail_cfg = load_config(tail_config) if tail_config else dict(cfg, component='tail')
-    tail = TailGenerator(rt, tail_cfg).eval()
-    load_stage_weights(tail_checkpoint, tail, editor_identity(rt, tail_cfg, component='tail'))
-    return tail
 
 
 def main():
@@ -76,54 +60,49 @@ def main():
     from .accelerator import set_device
 
     cfg = load_config(args.config)
-    if cfg['stage'] not in (1, 2):
-        raise ValueError('Only Stage 1 and Stage 2 configurations are supported')
-    if args.command != 'train' and args.distributed:
-        raise ValueError('Inference runs on one device')
-    if args.command != 'train' and str(cfg.get('component', 'editor')) != 'editor':
-        raise ValueError('Inference requires an editor config; pass tail via --tail-checkpoint / --tail-config')
+    if args.command != "train" and args.distributed:
+        raise ValueError("Inference runs on one device")
     device = dist.initialize(args.device) if args.distributed else set_device(args.device)
-    if args.command == 'train':
+    if args.command == "train":
         from .train import train
+
         train(args, cfg, device)
     else:
-        from .inference import edit_image, t2i_feedback
-        from .loading import load_native
-        from .images import save_image
         import torch
 
-        if (args.checkpoint_mode == 'trained') != bool(args.checkpoint):
-            raise ValueError('trained mode requires --checkpoint; native mode must omit it')
+        from .images import save_image
+        from .inference import edit_image, t2i_feedback
+        from .loading import load_native
+
+        if (args.checkpoint_mode == "trained") != bool(args.checkpoint):
+            raise ValueError("trained mode requires --checkpoint; native mode must omit it")
         output = Path(args.output).resolve()
         output.mkdir(parents=True, exist_ok=False)
         rt = load_native(args.model, args.source, cfg, device, False)
         editor, meta = _load_editor(rt, cfg, args.checkpoint_mode, args.checkpoint)
-        tail = _load_tail(rt, cfg, args.tail_checkpoint, args.tail_config)
-        if args.command == 'edit':
+        if args.command == "edit":
             images, state, record = edit_image(
                 rt, editor, cfg, args.image, args.instruction, args.seed,
-                edit_cfg_scale=args.edit_cfg_scale, tail=tail,
+                edit_cfg_scale=args.edit_cfg_scale,
             )
         else:
             images, state, record = t2i_feedback(
                 rt, editor, cfg, args.prompt, args.seed,
-                edit_cfg_scale=args.edit_cfg_scale, tail=tail,
+                edit_cfg_scale=args.edit_cfg_scale,
             )
         for name, image in images.items():
-            save_image(output / (name + '.png'), image)
+            save_image(output / (name + ".png"), image.clamp(-1.0, 1.0))
         if state is not None:
-            torch.save(state.detach().float().cpu(), output / 'edited_state.pt')
+            torch.save(state.detach().float().cpu(), output / "edited_state.pt")
         record.update(
             checkpoint_mode=args.checkpoint_mode,
             checkpoint=args.checkpoint,
-            checkpoint_step=meta.get('step') if meta else None,
-            tail_checkpoint=args.tail_checkpoint,
-            tail_config=args.tail_config,
+            checkpoint_step=meta.get("step") if meta else None,
         )
-        (output / 'result.json').write_text(json.dumps(record, indent=2, ensure_ascii=False) + '\n')
+        (output / "result.json").write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
     if args.distributed:
         dist.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

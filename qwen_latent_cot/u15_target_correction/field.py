@@ -1,25 +1,19 @@
-"""Native continuation and fixed-time state editing."""
+"""Strict isochronic manifold transition, subgrid lookahead preview, and frozen native T2I."""
 
 import torch
 from torch.utils.checkpoint import checkpoint
+
 from . import GEOMETRY_PROTOCOL, KIND, PROTOCOL_VERSION
 
-def protocol(rt, cfg):
-    """What a cached record actually depends on.
 
-    The state times a cache carries are the *grid nodes* it walked, and the
-    probabilities a run draws them with are a sampling choice. Binding the
-    cache to the latter made a single-node 0.36 recipe reject the three-node
-    0.25/0.36/0.50 cache even though the node it reads is identically
-    discretised. The grid is what is pinned here; the draw stays free.
-    """
-    nodes = [float(t) for t in cfg.get("phase_grid_times", cfg["state_times"])]
+def protocol(rt, cfg):
+    """Frozen discretisation fingerprint bound to cached manifests."""
+    nodes = [float(cfg["read_time"]), float(cfg["stop_time"])]
     return dict(
-        phase_grid_times=nodes,
+        phase_grid_times=sorted(set(nodes)),
         kind=KIND,
         protocol_version=PROTOCOL_VERSION,
         geometry=GEOMETRY_PROTOCOL,
-        inversion=inversion_solver(cfg),
         native=rt.identity,
         width=rt.width,
         height=rt.height,
@@ -32,27 +26,19 @@ def protocol(rt, cfg):
         cfg_interval=[float(t) for t in cfg["cfg_interval"]],
         t_eps=float(cfg["t_eps"]),
         read_time=float(cfg["read_time"]),
-        edit_steps=int(cfg["edit_steps"]),
+        stop_time=float(cfg["stop_time"]),
         lookahead_steps=int(cfg["lookahead_steps"]),
         condition_protocol=cfg["condition_protocol"],
-        preview_protocol="heun_then_euler_from_state_v1",
+        preview_protocol="subgrid_heun_euler_v2",
         tail_solver="euler",
-        keep_instruction=cfg["keep_instruction"],
     )
 
 
 def phase_grid(rt, cfg):
-    """The deployment solver grid: the native grid plus the declared nodes.
-
-    The nodes are ``phase_grid_times`` when a config declares them, and fall
-    back to the sampled ``state_times`` otherwise. Supervised moments and
-    solver nodes stay separable: a run can read at 0.36 while the cached parent
-    states still span 0.25/0.36/0.50, and both sides of a cache then agree on
-    the same discretisation.
-    """
+    """Deployment ODE solver grid: native shifted grid plus read_time and stop_time."""
     values = [float(t) for t in rt.times()]
-    extras = [float(cfg["read_time"])]
-    extras += [float(t) for t in cfg.get("phase_grid_times", cfg["state_times"])]
+    extras = [float(cfg["read_time"]), float(cfg["stop_time"])]
+    extras += [float(t) for t in cfg.get("phase_grid_times", ())]
     for value in extras:
         values = [t for t in values if abs(t - value) > 1e-7] + [value]
     return sorted(values)
@@ -69,26 +55,8 @@ def time_key(value):
     return f"{float(value):.6f}"
 
 
-def weighted_choice(rng, values, weights, total=1.0):
-    """One weighted draw in declaration order; ``total`` lets callers skip renormalizing."""
-    draw = rng.random() * float(total)
-    cumulative = 0.0
-    for value, weight in zip(values, weights):
-        cumulative += float(weight)
-        if draw <= cumulative + 1e-12:
-            return value
-    return values[-1]
-
-
-def sample_state_time(cfg, rng):
-    """One supported native generation time; edit progress s is sampled later."""
-    times = [float(t) for t in cfg["state_times"]]
-    probs = [float(p) for p in cfg["state_time_probs"]]
-    return weighted_choice(rng, times, probs)
-
-
 def euler(z, times, velocity):
-    """Discrete Euler with every state connected to the velocity parameters."""
+    """Discrete Euler integration along ``times``."""
     z = z.float()
     for left, right in zip(times[:-1], times[1:]):
         step = z.new_tensor(float(right) - float(left))
@@ -105,27 +73,53 @@ def euler(z, times, velocity):
     return z
 
 
-@torch.no_grad()
-def preview_image(state, start_time, grid, velocity):
-    """Look ahead on a copy: one Heun interval then one Euler interval."""
-    original = state.detach().clone()
+def preview_subgrid(grid, start_time, steps=4):
+    """Select ``steps`` evenly spaced sub-intervals on ``[start_time, 1.0]``."""
+    k = int(steps)
+    if k < 2:
+        raise ValueError(f"preview_image requires steps >= 2, got {steps}")
     tail = segment_times(grid, start_time, 1.0)
-    middle = tail[len(tail) // 2]
-    if not float(start_time) < middle < 1:
-        raise ValueError("Native grid has no interior preview node after the state time")
-    z = original.clone()
-    left, mid, right = z.new_tensor(float(start_time)), z.new_tensor(middle), z.new_tensor(1.0)
-    first = velocity(z, left)
-    proposal = z + (mid - float(start_time)) * first
-    z = z + (mid - float(start_time)) * 0.5 * (first + velocity(proposal, mid))
-    z = z + (right - mid) * velocity(z, mid)
+    if len(tail) < 3:
+        raise ValueError("Native grid has no interior preview node after start_time")
+    eff_k = min(k, len(tail) - 1)
+    indices = sorted({round(i * (len(tail) - 1) / eff_k) for i in range(eff_k + 1)})
+    sub = [float(tail[i]) for i in indices]
+    if len(sub) < 3 or not float(start_time) < sub[1] < 1.0:
+        raise ValueError("Preview subgrid failed to resolve an interior node")
+    return sub
+
+
+@torch.no_grad()
+def preview_image(state, start_time, grid, velocity, *, steps=4):
+    """Multi-step subgrid lookahead on a detached copy (Heun on first interval + Euler).
+
+    Increasing ``steps`` from 2 -> 4 resolves the [0.36, 0.75] object-emergence
+    band so secondary and small objects crystallize before UND inspection,
+    without mutating ``state``.
+    """
+    original = state.detach().clone()
+    sub = preview_subgrid(grid, start_time, steps=steps)
+    z = original.clone().float()
+
+    # Heun predictor-corrector on the highest-curvature initial interval [t0, sub[1]]
+    t_left = z.new_tensor(sub[0])
+    t_next = z.new_tensor(sub[1])
+    dt0 = float(sub[1] - sub[0])
+    v0 = velocity(z, t_left)
+    proposal = z + dt0 * v0
+    z = z + 0.5 * dt0 * (v0 + velocity(proposal, t_next))
+
+    # Remaining intervals use standard Euler steps along the shifted subgrid
+    for left, right in zip(sub[1:-1], sub[2:]):
+        z = z + float(right - left) * velocity(z, z.new_tensor(float(left)))
+
     if not torch.equal(state.detach(), original):
         raise RuntimeError("Preview mutated the main trajectory")
     return z
 
 
 class NativeT2I:
-    """Frozen text-to-image CFG. It never loads the editor LoRA."""
+    """Frozen native text-to-image CFG velocity field (never touches editor LoRA)."""
 
     def __init__(self, rt, raw, cfg):
         self.rt, self.cfg = rt, cfg
@@ -144,125 +138,105 @@ class NativeT2I:
         return self.rt.guided(positive, negative, float(self.cfg["cfg_scale"])).float()
 
 
-class TailT2I:
-    """Text-to-image CFG backed by the separately trained TailGenerator."""
-
-    def __init__(self, tail, raw, cfg):
-        self.tail, self.rt, self.cfg = tail, tail.rt, cfg
-        pos = self.rt.prefix(raw)
-        self.positive = (pos.cache, pos.indexes, None)
-        if float(cfg["cfg_scale"]) > 1:
-            neg = self.rt.prefix(None)
-            self.negative = (neg.cache, neg.indexes, None)
-        else:
-            self.negative = None
-        self.calls = 0
-
-    def __call__(self, z, t):
-        self.calls += 1
-        positive = self.tail.predict_velocity(z, t, self.positive).float()
-        lo, hi = [float(v) for v in self.cfg["cfg_interval"]]
-        if self.negative is None or not lo <= float(t) <= hi:
-            return positive
-        self.calls += 1
-        negative = self.tail.predict_velocity(z, t, self.negative).float()
-        return self.rt.guided(positive, negative, float(self.cfg["cfg_scale"])).float()
-
-
-def _edit_step_velocity(editor, state, time, progress, joint_prefix, empty_prefix, base, cfg_scale):
-    if float(cfg_scale) > 1.0:
-        return editor.guided_state_velocity(
-            state, float(time), progress, joint_prefix, empty_prefix, base, cfg_scale=cfg_scale
-        )
-    return editor.state_velocity(state, float(time), progress, joint_prefix, base)
+@torch.no_grad()
+def project_clean_to_native_manifold(
+    clean_pred,
+    eps_anchor,
+    output_time,
+    *,
+    sigma=1.0,
+    noise_refresh=0.0,
+    generator=None,
+):
+    """Project a clean target estimate onto the native noisy manifold at ``output_time``."""
+    t_out = float(output_time)
+    if not 0.0 < t_out < 1.0:
+        raise ValueError(f"output_time must lie in (0, 1), got {output_time}")
+    eta = float(noise_refresh)
+    if not 0.0 <= eta <= 1.0:
+        raise ValueError(f"noise_refresh must lie in [0, 1], got {noise_refresh}")
+    eps_eff = eps_anchor.float()
+    if eta > 0.0:
+        xi = torch.randn(
+            eps_eff.shape,
+            device=eps_eff.device,
+            dtype=torch.float32,
+            generator=generator,
+        ) * float(sigma)
+        eps_eff = ((1.0 - eta * eta) ** 0.5) * eps_eff + eta * xi
+    return t_out * clean_pred.float() + (1.0 - t_out) * eps_eff
 
 
-def _resolve_joint(prefixes, joint_prefix):
-    """Pick the conditional branch and refuse the empty prefix as that branch.
+@torch.no_grad()
+def isochronic_manifold_transition(
+    editor,
+    state,
+    time,
+    feedback,
+    grid,
+    *,
+    stop_time=None,
+    edit_cfg_scale=None,
+    noise_refresh=None,
+    anchor_prefix=None,
+    generator=None,
+):
+    """Strict isochronic manifold jump: z_{t0}^{(S)} -> z_hat_{t0}^{(T)}.
 
-    ``joint_prefix`` overrides ``prefixes["joint"]``; it never selects the
-    unconditional branch, which is always ``prefixes["empty"]``. Passing the
-    empty prefix here turns u_cfg = u_empty + w * (u_empty - u_empty) into a
-    plain unconditional step, silently dropping the edit instruction.
+    1. Extract frozen native clean anchor x_hat_S = H_0(z_{t0}, t0, empty) and
+       structural noise anchor eps_anchor = (z_{t0} - t0 * x_hat_S) / (1 - t0).
+    2. Roll out adapted short-horizon semantic flow q_tau on [t0, stop_time]
+       and read out clean target estimate x_hat_T = H_theta(q_{stop_time}, stop_time, feedback).
+    3. Reproject strictly onto the native noisy manifold at the SAME time t0:
+       z_hat_{t0} = t0 * x_hat_T + (1 - t0) * eps_eff.
     """
-    joint = prefixes["joint"] if joint_prefix is None else joint_prefix
-    empty = prefixes.get("empty", prefixes["image"])
-    if joint is empty:
+    t0 = float(time)
+    expected = float(editor.config["read_time"])
+    if abs(t0 - expected) > 1e-6:
         raise ValueError(
-            "joint_prefix must not be the empty (unconditional) prefix: "
-            "the unconditional branch is already prefixes['empty']"
+            f"isochronic_manifold_transition requires time == read_time ({expected}), got {time}"
         )
-    return joint, empty
+    t_stop = float(editor.config["stop_time"] if stop_time is None else stop_time)
+    if not t0 < t_stop < 1.0:
+        raise ValueError(f"stop_time must satisfy read_time ({t0}) < stop_time < 1.0, got {t_stop}")
 
+    cfg_scale = float(editor.config.get("edit_cfg_scale", 1.0) if edit_cfg_scale is None else edit_cfg_scale)
+    if cfg_scale < 1.0:
+        raise ValueError(f"edit_cfg_scale must be >= 1.0, got {cfg_scale}")
+    eta = float(editor.config.get("noise_refresh", 0.0) if noise_refresh is None else noise_refresh)
 
-def rollout_prefix(editor, anchor, time, prefixes, target_step, total_steps,
-                   base_prediction=None, cfg_scale=1.0, joint_prefix=None):
-    """Run ``target_step`` detached editor Euler steps from ``anchor`` to obtain q_k."""
-    target_step = int(target_step)
-    total_steps = int(total_steps)
-    if target_step < 0 or target_step > total_steps:
-        raise ValueError("target_step must lie in [0, total_steps]")
-    state = anchor.float()
-    if base_prediction is None:
-        base = editor.image_clean(state, float(time), prefixes["image"])
-    else:
-        base = base_prediction.float()
-    if target_step == 0:
-        return state, base
-    joint, empty = _resolve_joint(prefixes, joint_prefix)
-    with torch.no_grad():
-        for index in range(target_step):
-            progress = index / total_steps
-            speed = _edit_step_velocity(
-                editor, state, time, progress, joint, empty, base, cfg_scale
-            )
-            state = state + speed / total_steps
-    return state, base
+    empty_pref = editor.empty_prefix() if anchor_prefix is None else anchor_prefix
+    x_source_est = editor.native_clean(state.detach(), t0, empty_pref)
+    eps_anchor = (state.float() - t0 * x_source_est.float()) / (1.0 - t0)
 
-
-def edit_state(editor, anchor, time, prefixes, steps, base_prediction=None, grad=False,
-               refresh_base=False, cfg_scale=1.0, joint_prefix=None):
-    """Euler in s at fixed native time t. Returns the edited state and b0.
-
-    ``grad=True`` keeps the edit axis differentiable across all ``K`` steps.
-    """
-    steps = int(steps)
-    if steps < 1:
-        raise ValueError("The state edit needs at least one Euler step")
-    state = anchor.float()
-    if base_prediction is None:
-        base = editor.image_clean(state, float(time), prefixes["image"])
-    else:
-        base = base_prediction.float()
-    joint, empty = _resolve_joint(prefixes, joint_prefix)
-    if not grad:
-        with torch.no_grad():
-            for index in range(steps):
-                progress = index / steps
-                # The velocity is measured against H0 at the anchor state by default,
-                # or re-anchored at the current state when refresh_base=True.
-                if refresh_base and index > 0:
-                    base = editor.image_clean(state, float(time), prefixes["image"])
-                speed = _edit_step_velocity(
-                    editor, state, time, progress, joint, empty, base, cfg_scale
-                )
-                state = state + speed / steps
-        return state, base
-
-    use_ckpt = bool(getattr(editor, "config", {}).get("activation_checkpointing", False))
-    for index in range(steps):
-        progress = index / steps
-
-        def step_fn(current, progress=progress):
-            return _edit_step_velocity(
-                editor, current, time, progress, joint, empty, base, cfg_scale
-            )
-
-        speed = checkpoint(step_fn, state, use_reentrant=False) if use_ckpt else step_fn(state)
-        state = state + speed / steps
-    return state, base
-
-
-def inversion_solver(cfg):
-    """Which backward scheme produced the labels; part of the cache protocol."""
-    return str(cfg.get("inversion", {}).get("solver", "reverse_heun"))
+    cond_pref = editor.feedback_prefix(feedback)
+    times = segment_times(grid, t0, t_stop)
+    calls_before = editor.clean_calls
+    q_stop = euler(
+        state.detach().clone(),
+        times,
+        lambda z, tau: editor.predict_velocity(
+            z, tau, cond_pref, empty_prefix=empty_pref, cfg_scale=cfg_scale
+        ),
+    )
+    clean_pred = editor.predict_guided_clean(
+        q_stop, t_stop, cond_pref, empty_prefix=empty_pref, cfg_scale=cfg_scale
+    )
+    z_iso = project_clean_to_native_manifold(
+        clean_pred,
+        eps_anchor,
+        t0,
+        sigma=editor.rt.noise_scale(),
+        noise_refresh=eta,
+        generator=generator,
+    )
+    return z_iso, clean_pred, eps_anchor, {
+        "input_time": t0,
+        "stop_time": t_stop,
+        "output_time": t0,
+        "times": [float(t) for t in times],
+        "edit_cfg_scale": cfg_scale,
+        "noise_refresh": eta,
+        "anchor_nfe": 1,
+        "correction_nfe": editor.clean_calls - calls_before,
+    }

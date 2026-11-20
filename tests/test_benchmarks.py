@@ -65,9 +65,9 @@ def test_t2i_generated_pair_reuses_one_read_state(monkeypatch):
     monkeypatch.setattr(generate,'phase_grid',lambda *args:[0,.36,1])
     monkeypatch.setattr(generate,'NativeT2I',lambda *args:None)
     monkeypatch.setattr(generate,'euler',lambda state,*args:state)
-    monkeypatch.setattr(generate,'preview_image',lambda state,*args:state)
+    monkeypatch.setattr(generate,'preview_image',lambda state,*args,**kwargs:state)
     monkeypatch.setattr(generate,'review_reflection',lambda *args:{'reflection':{'outcome':'edit','instruction':'Add a dog.','raw':'text'}})
-    monkeypatch.setattr(generate,'_edit',lambda editor,state,*args:state+1)
+    monkeypatch.setattr(generate,'_transition',lambda editor,state,*args:state+1)
     images, info=generate.t2i_pair(rt,None,cfg,'a dog',4)
     torch.testing.assert_close(images['result'],images['baseline']+1)
     assert info['reflection']['instruction']=='Add a dog.'
@@ -145,7 +145,7 @@ def test_reflection_failure_never_becomes_baseline_score(monkeypatch):
     monkeypatch.setattr(generate,'phase_grid',lambda *args:[0,.36,1])
     monkeypatch.setattr(generate,'NativeT2I',lambda *args:None)
     monkeypatch.setattr(generate,'euler',lambda state,*args:state)
-    monkeypatch.setattr(generate,'preview_image',lambda state,*args:state)
+    monkeypatch.setattr(generate,'preview_image',lambda state,*args,**kwargs:state)
     monkeypatch.setattr(generate,'review_reflection',lambda *args:{'reflection':{'outcome':'failed_parse','raw':'bad'}})
     with pytest.raises(ValueError, match='reflection'):
         generate.t2i_pair(rt,None,cfg,'a dog',4)
@@ -173,10 +173,10 @@ def test_two_editors_share_reflection_and_initial_state(monkeypatch):
     monkeypatch.setattr(generate,'phase_grid',lambda *args:[0,.36,1])
     monkeypatch.setattr(generate,'NativeT2I',lambda *args:None)
     monkeypatch.setattr(generate,'euler',lambda state,*args:state)
-    monkeypatch.setattr(generate,'preview_image',lambda state,*args:state)
+    monkeypatch.setattr(generate,'preview_image',lambda state,*args,**kwargs:state)
     monkeypatch.setattr(generate,'review_reflection',lambda *args:{'reflection':{'outcome':'edit','instruction':'Add a dog.','raw':'text'}})
     mode={'trained':False}
-    monkeypatch.setattr(generate,'_edit',lambda editor,state,*args:state+(2 if mode['trained'] else 1))
+    monkeypatch.setattr(generate,'_transition',lambda editor,state,*args:state+(2 if mode['trained'] else 1))
     def load(): mode['trained']=True
     images,_=generate.t2i_pair(rt,None,cfg,'a dog',4,load_trained=load)
     torch.testing.assert_close(images['native_result'],images['baseline']+1)

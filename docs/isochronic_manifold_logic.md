@@ -163,7 +163,7 @@ $$\hat{z}_{0.36} = t_0 \cdot \hat{x}_T + (1 - t_0) \cdot \hat{\epsilon}_{\text{a
 
 ## 5. 核心代数恒等式速查与代码映射表
 
-| 概念名称 | 数学表达式 | 代码实现位置（`bagel-loop-layer-NPU`） |
+| 概念名称 | 数学表达式 | 代码实现位置（`reflective-t2i`） |
 | :--- | :--- | :--- |
 | **加噪状态方程** | $z_t = t \cdot x + (1 - t) \cdot \epsilon$ | `train.py:97` (`anchor = t0 * source + (1.0 - t0) * eps`) |
 | **流匹配速度转换** | $v_t = \frac{\hat{x} - z_t}{1 - t}$ | `model.py:203` (`(clean - state.float()) / max(1.0 - tau, t_eps)`) |

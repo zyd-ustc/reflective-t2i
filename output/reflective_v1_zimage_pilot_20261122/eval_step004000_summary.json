@@ -1,0 +1,60 @@
+{
+  "checkpoint": "/data/zyd_workspace/outputs/reflective_v1_zimage_400k_4npu_20261122/step_004000",
+  "pairs_seen": 256000,
+  "epochs": 0.667,
+  "protocol": "reflective_t2i_v1_unseen_val_100",
+  "seed": 20261122,
+  "judge": "/data/zyd_workspace/models/Qwen3-VL-8B-Instruct",
+  "overall": {
+    "n": 100,
+    "edit_followed": 0.54,
+    "bg_preserved": 0.62,
+    "quality_ok": 0.89,
+    "strict_pass": 0.43,
+    "edit_l1": 0.4105,
+    "bg_l1": 0.15569,
+    "hf_ratio": 1.0342
+  },
+  "by_action": {
+    "add": {
+      "n": 40,
+      "edit_followed": 0.6,
+      "bg_preserved": 0.675,
+      "quality_ok": 0.95,
+      "strict_pass": 0.5,
+      "edit_l1": 0.39811,
+      "bg_l1": 0.12854,
+      "hf_ratio": 1.0425
+    },
+    "remove": {
+      "n": 20,
+      "edit_followed": 0.55,
+      "bg_preserved": 0.55,
+      "quality_ok": 0.8,
+      "strict_pass": 0.45,
+      "edit_l1": 0.45646,
+      "bg_l1": 0.17676,
+      "hf_ratio": 0.9949
+    },
+    "attr": {
+      "n": 20,
+      "edit_followed": 0.65,
+      "bg_preserved": 0.6,
+      "quality_ok": 0.85,
+      "strict_pass": 0.4,
+      "edit_l1": 0.37014,
+      "bg_l1": 0.1903,
+      "hf_ratio": 1.0901
+    },
+    "move": {
+      "n": 20,
+      "edit_followed": 0.3,
+      "bg_preserved": 0.6,
+      "quality_ok": 0.9,
+      "strict_pass": 0.3,
+      "edit_l1": 0.4297,
+      "bg_l1": 0.15431,
+      "hf_ratio": 1.0007
+    }
+  }
+}

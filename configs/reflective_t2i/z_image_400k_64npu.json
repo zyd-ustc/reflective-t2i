@@ -1,0 +1,68 @@
+{
+  "protocol": "reflective_t2i_v1",
+  "generator": {
+    "adapter": "z_image_s3dit",
+    "model_path": "/data/zyd_workspace/models/Z-Image",
+    "zimage_core_src": "/data/zyd_workspace/zimage-isochronic-correction/src",
+    "dtype": "bfloat16",
+    "width": 512,
+    "height": 512,
+    "num_inference_steps": 30,
+    "guidance_scale": 4.0,
+    "cfg_interval": [0.0, 0.80],
+    "scheduler": "native"
+  },
+  "observer": {
+    "backend": "openai_vlm",
+    "model_id": "Qwen/Qwen3.5-9B",
+    "temperature": 0.0,
+    "max_new_tokens": 384
+  },
+  "reflection": {
+    "mode": "single_pass_blind_describe_then_compare_json",
+    "lookahead_steps": 4,
+    "read_progress": 0.30,
+    "stop_progress": 0.56,
+    "max_corrections": 1,
+    "focused_recheck_actions": ["add", "remove"],
+    "confidence_threshold": 0.75,
+    "contradiction_gate": true
+  },
+  "corrector": {
+    "type": "single_stream_token_masked_lora",
+    "rank": 32,
+    "zero_init": true,
+    "layer_scope": "all",
+    "adapt_noise_refiner": false,
+    "target_suffixes": ["to_q", "to_k", "to_v", "to_out.0"],
+    "anchor_mode": "conditional_native",
+    "edit_cfg_scale": 1.4,
+    "trust_region_rho": 0.65,
+    "noise_refresh": 0.0,
+    "condition_mode": "feedback_only"
+  },
+  "training": {
+    "manifest_glob": "/data/zyd_workspace/isochronic_data_20261107/prod_1m_glm53_20261118/final_manifests/manifest_*.jsonl",
+    "pilot_pairs": null,
+    "lr": 0.00003,
+    "lr_final": 0.000005,
+    "warmup_steps": 200,
+    "global_batch": 64,
+    "grad_accum": 1,
+    "epochs": 2,
+    "max_steps": 12000,
+    "save_every": 1000,
+    "keep_checkpoints": 4,
+    "bridge_start_prob": 0.25,
+    "soar_rollout_prob": 0.15,
+    "soar_warmup_steps": 2000,
+    "soar_cps_prob": 0.0,
+    "soar_cps_eta": 0.30,
+    "edit_prompt_dropout": 0.10,
+    "dropout_target": "source_identity",
+    "loss_mode": "delta_weighted_clean_mse_plus_cosine",
+    "delta_weight_lambda": 1.0,
+    "delta_weight_max": 3.0,
+    "cosine_lambda": 0.02
+  }
+}

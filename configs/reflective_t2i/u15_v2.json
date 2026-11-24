@@ -1,0 +1,48 @@
+{
+  "protocol": "reflective_t2i_v1",
+  "generator": {
+    "adapter": "sensenova_u15",
+    "model_path": "/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT",
+    "source_path": "../sensenova-u15-c35c83b",
+    "width": 512,
+    "height": 512,
+    "num_inference_steps": 50,
+    "guidance_scale": 4.0,
+    "cfg_interval": [0.0, 0.80]
+  },
+  "observer": {
+    "backend": "local_hf",
+    "model_id": "/data/zyd_workspace/models/Qwen3-VL-8B-Instruct",
+    "temperature": 0.0,
+    "max_new_tokens": 384
+  },
+  "reflection": {
+    "mode": "single_pass_blind_describe_then_compare_json",
+    "lookahead_steps": 4,
+    "read_progress": 0.36,
+    "stop_progress": 0.60,
+    "max_corrections": 1,
+    "focused_recheck_actions": ["add", "remove"],
+    "confidence_threshold": 0.75,
+    "contradiction_gate": true
+  },
+  "corrector": {
+    "type": "u15_gen_lora",
+    "rank": 64,
+    "anchor_mode": "conditional_native",
+    "edit_cfg_scale": 1.35,
+    "trust_region_rho": 0.65,
+    "noise_refresh": 0.0,
+    "condition_mode": "feedback_only"
+  },
+  "training": {
+    "bridge_start_prob": 0.25,
+    "soar_rollout_prob": 0.40,
+    "edit_prompt_dropout": 0.10,
+    "dropout_target": "source_identity",
+    "loss_mode": "delta_weighted_clean_mse_plus_cosine",
+    "delta_weight_lambda": 4.0,
+    "delta_weight_max": 8.0,
+    "cosine_lambda": 0.10
+  }
+}

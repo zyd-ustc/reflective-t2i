@@ -1,0 +1,62 @@
+{
+  "protocol": "reflective_t2i_v1",
+  "generator": {
+    "adapter": "diffusers_sd35",
+    "model_id": "/data/zyd_workspace/models/stable-diffusion-3.5-large",
+    "dtype": "bfloat16",
+    "width": 1024,
+    "height": 1024,
+    "num_inference_steps": 40,
+    "guidance_scale": 4.5,
+    "cfg_interval": [0.0, 0.80],
+    "scheduler": "native_flow_match"
+  },
+  "observer": {
+    "backend": "openai_vlm",
+    "model_id": "Qwen/Qwen3.5-9B",
+    "temperature": 0.0,
+    "max_new_tokens": 384
+  },
+  "reflection": {
+    "mode": "single_pass_blind_describe_then_compare_json",
+    "lookahead_steps": 4,
+    "read_progress": 0.36,
+    "stop_progress": 0.60,
+    "max_corrections": 1,
+    "focused_recheck_actions": ["add", "remove"],
+    "confidence_threshold": 0.75,
+    "contradiction_gate": true
+  },
+  "corrector": {
+    "type": "dual_stream_image_lora",
+    "rank": 16,
+    "zero_init": true,
+    "layer_scope": "middle_third",
+    "include_ff": false,
+    "anchor_mode": "conditional_native",
+    "edit_cfg_scale": 1.4,
+    "trust_region_rho": 0.65,
+    "noise_refresh": 0.0,
+    "condition_mode": "feedback_only"
+  },
+  "training": {
+    "manifest_glob": "/data/zyd_workspace/isochronic_data_20261107/prod_1m_glm53_20261118/final_manifests/manifest_*.jsonl",
+    "pilot_pairs": 50000,
+    "lr": 0.00003,
+    "lr_final": 0.000005,
+    "warmup_steps": 200,
+    "global_batch": 64,
+    "epochs": 2,
+    "bridge_start_prob": 0.25,
+    "soar_rollout_prob": 0.15,
+    "soar_warmup_steps": 150,
+    "soar_cps_prob": 0.0,
+    "soar_cps_eta": 0.30,
+    "edit_prompt_dropout": 0.10,
+    "dropout_target": "source_identity",
+    "loss_mode": "delta_weighted_clean_mse_plus_cosine",
+    "delta_weight_lambda": 1.0,
+    "delta_weight_max": 3.0,
+    "cosine_lambda": 0.02
+  }
+}

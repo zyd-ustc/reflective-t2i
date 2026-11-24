@@ -31,16 +31,17 @@ from PIL import Image
 import torch
 
 ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE = Path(os.environ.get("REFLECTIVE_WORKSPACE", ROOT.parents[1]))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
-DEFAULT_U15_PY = "/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python"
-DEFAULT_QWEN_PY = "/data/zyd_workspace/bagel-LatentCoT/envs/qwen3vl-score/bin/python"
+DEFAULT_U15_PY = str(WORKSPACE / "venvs/u15-NPU/bin/python")
+DEFAULT_QWEN_PY = str(WORKSPACE / "envs/qwen3vl-score/bin/python")
 DEFAULT_MODEL = "/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT"
-DEFAULT_SOURCE = "/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b"
+DEFAULT_SOURCE = str(WORKSPACE / "code/sensenova-u15-c35c83b")
 DEFAULT_JUDGE_MODEL = "/data/zyd_workspace/models/Qwen3-VL-8B-Instruct"
 DEFAULT_CONFIG = str(ROOT / "configs/u15_isochronic_state/isochronic_manifold.json")
 DEFAULT_GENEVAL = (
@@ -51,7 +52,7 @@ DEFAULT_GENEVAL_PP = (
     "/data/zyd_workspace/isochronic_data_20261107/benchmark_assets/frozen/outputs/"
     "0_eval62326_qwen27b_sixbench_20261019/foundation_v1/inputs/score_manifests/geneval_pp.jsonl"
 )
-DEFAULT_GENEVAL2 = "/data/zyd_workspace/bagel-LatentCoT/code/anchor-search-20261104/data/geneval2_800.jsonl"
+DEFAULT_GENEVAL2 = str(WORKSPACE / "code/anchor-search-20261104/data/geneval2_800.jsonl")
 DEFAULT_T2I_COMPBENCH_PP = (
     "/data/zyd_workspace/isochronic_data_20261107/benchmark_assets/frozen/outputs/"
     "0_eval62326_qwen27b_sixbench_20261019/foundation_v1/inputs/score_manifests/t2i_compbench_pp.jsonl"

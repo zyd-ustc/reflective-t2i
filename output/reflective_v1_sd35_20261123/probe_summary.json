@@ -1,0 +1,46 @@
+{
+  "model": "/data/zyd_workspace/models/stable-diffusion-3.5-large",
+  "adapter": "diffusers_sd35",
+  "total_native_steps": 40,
+  "num_prompts": 6,
+  "selected_read_progress": 0.32,
+  "selected_stop_progress": 0.56,
+  "hardware_gate": {
+    "blocks": 38,
+    "wrapped_image_projections": 152,
+    "trainable_params": 23658496,
+    "zero_init_max_abs_diff": 0.0,
+    "frozen_grads": 0,
+    "step_seconds_1npu": 0.391,
+    "peak_vram_gb": 33.21
+  },
+  "candidates": {
+    "0.24": {
+      "read_progress": 0.24,
+      "prefix_steps": 20,
+      "prefix_frac": 0.5,
+      "midband_steps_plus_0.24": 9,
+      "tail_steps": 20,
+      "mean_preview_to_final_l1": 0.0337,
+      "mean_preview_hf_grad": 0.03746
+    },
+    "0.32": {
+      "read_progress": 0.32,
+      "prefix_steps": 23,
+      "prefix_frac": 0.575,
+      "midband_steps_plus_0.24": 8,
+      "tail_steps": 17,
+      "mean_preview_to_final_l1": 0.026,
+      "mean_preview_hf_grad": 0.03759
+    },
+    "0.40": {
+      "read_progress": 0.4,
+      "prefix_steps": 27,
+      "prefix_frac": 0.675,
+      "midband_steps_plus_0.24": 6,
+      "tail_steps": 13,
+      "mean_preview_to_final_l1": 0.0179,
+      "mean_preview_hf_grad": 0.03798
+    }
+  }
+}

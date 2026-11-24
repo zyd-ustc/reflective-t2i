@@ -19,9 +19,11 @@
 ## 2. 单题 CLI 与 64 卡全量闭环评测
 
 ```bash
-PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
+# 从仓库根目录运行。集群默认布局：工作区/code/仓库；非此布局时请指定已有工作区。
+export REFLECTIVE_WORKSPACE="${REFLECTIVE_WORKSPACE:-$(cd ../.. && pwd)}"
+PY=${REFLECTIVE_WORKSPACE}/venvs/u15-NPU/bin/python
 MODEL=/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT
-SOURCE=/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b
+SOURCE=${REFLECTIVE_WORKSPACE}/code/sensenova-u15-c35c83b
 CONFIG=configs/u15_isochronic_state/isochronic_manifold.json
 
 # 单题闭环文生图
@@ -40,7 +42,7 @@ CONFIG=configs/u15_isochronic_state/isochronic_manifold.json
 # 64 卡 GenEval2(800) + T2I-CompBench++(2400) 全量闭环评测
 "$PY" scripts/bench_t2i_closed_loop64.py launch-gen64 \
   --skip-geneval --skip-geneval-pp \
-  --geneval2 /data/zyd_workspace/bagel-LatentCoT/code/anchor-search-20261104/data/geneval2_800.jsonl \
+  --geneval2 "${REFLECTIVE_WORKSPACE}/code/anchor-search-20261104/data/geneval2_800.jsonl" \
   --t2i-compbench /data/zyd_workspace/isochronic_data_20261107/benchmark_assets/frozen/outputs/0_eval62326_qwen27b_sixbench_20261019/foundation_v1/inputs/score_manifests/t2i_compbench_pp.jsonl \
   --config "$CONFIG" --checkpoint /data/zyd_workspace/isochronic_data_20261107/isochronic_manifold_400k_20261119/step_006001 --out /path/to/bench_gv2_out
 ```

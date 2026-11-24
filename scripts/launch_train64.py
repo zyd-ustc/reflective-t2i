@@ -9,8 +9,9 @@ import time
 from pathlib import Path
 
 CODE = Path(__file__).resolve().parent.parent
-PY = "/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python"
-SOURCE = "/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b"
+WORKSPACE = Path(os.environ.get("REFLECTIVE_WORKSPACE", CODE.parents[1]))
+PY = str(WORKSPACE / "venvs/u15-NPU/bin/python")
+SOURCE = str(WORKSPACE / "code/sensenova-u15-c35c83b")
 MODEL = "/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT"
 
 

@@ -1,0 +1,33 @@
+{
+  "total_native_steps": 30,
+  "num_prompts": 6,
+  "candidates": {
+    "0.24": {
+      "read_progress": 0.24,
+      "prefix_steps": 20,
+      "prefix_frac": 0.667,
+      "midband_steps_plus_0.24": 6,
+      "tail_steps": 10,
+      "mean_preview_to_final_l1": 0.0379,
+      "mean_preview_hf_grad": 0.02716
+    },
+    "0.30": {
+      "read_progress": 0.3,
+      "prefix_steps": 22,
+      "prefix_frac": 0.733,
+      "midband_steps_plus_0.24": 5,
+      "tail_steps": 8,
+      "mean_preview_to_final_l1": 0.0299,
+      "mean_preview_hf_grad": 0.02739
+    },
+    "0.36": {
+      "read_progress": 0.36,
+      "prefix_steps": 24,
+      "prefix_frac": 0.8,
+      "midband_steps_plus_0.24": 4,
+      "tail_steps": 6,
+      "mean_preview_to_final_l1": 0.0263,
+      "mean_preview_hf_grad": 0.02783
+    }
+  }
+}

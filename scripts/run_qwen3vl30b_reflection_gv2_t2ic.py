@@ -12,6 +12,7 @@ from pathlib import Path
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parent.parent
+WORKSPACE = Path(os.environ.get("REFLECTIVE_WORKSPACE", ROOT.parents[1]))
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -27,7 +28,7 @@ from qwen_latent_cot.u15_target_correction.diagnosis import (
 )
 
 DEFAULT_MODEL = "/data/ltj/modelscope/Qwen3-VL-30B-A3B-Instruct"
-DEFAULT_QWEN_PY = "/data/zyd_workspace/bagel-LatentCoT/envs/qwen3vl-score/bin/python"
+DEFAULT_QWEN_PY = str(WORKSPACE / "envs/qwen3vl-score/bin/python")
 HOSTS_FILE = Path(os.environ.get("HOSTS_FILE", "/root/hosts"))
 
 

@@ -28,10 +28,10 @@ H1 中的 b_t 是“已知目标状态对照”，不是编辑器的理论上界
 
 在有空闲 NPU 的 ModelArts 环境执行，不占用或终止正在训练的进程。项目文档中的路径仅作为定位线索，执行者先确认它们存在：
 
-- 项目：`/data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU`
-- Python：`/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python`
+- 项目：当前 `reflective-t2i` 仓库根目录
+- Python：`${REFLECTIVE_WORKSPACE}/venvs/u15-NPU/bin/python`
 - 底座：`/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT`
-- 上游源码：`/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b`
+- 上游源码：`${REFLECTIVE_WORKSPACE}/code/sensenova-u15-c35c83b`
 
 编辑器检查点由执行者选择一个已经完成保存、与当前底座兼容的版本，全实验固定。读取其 manifest，确认训练时间为 0.36、几何协议为 shared_field_of_view_v2。旧 step_014723 不作为默认选项；不通过关闭 geometry_gate 来运行。
 

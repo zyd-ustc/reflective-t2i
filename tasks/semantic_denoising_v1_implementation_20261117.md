@@ -2,7 +2,7 @@
 
 日期：2026-11-17。交付物：供用户实施的代码设计与配方；本文没有实施代码修改，也没有启动训练。
 
-项目根目录：`/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU`。
+项目根目录：`/Users/zyd/Documents/LCoT-codex/reflective-t2i`。
 
 ## 1. 固定本版合同
 
@@ -99,7 +99,7 @@ valid 的形状为 `[B,1,H,W]`，用于排除 letterbox。它不是编辑区域�
 
 ## 4. 模型：新增 SemanticDenoiser，不把旧 TailGenerator 改名混用
 
-目标文件：`/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/model.py`。
+目标文件：`/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/model.py`。
 
 新增接口常量 `semantic_denoising_v1`，新增类 `SemanticDenoiser(_GENFlowBase)`，由 `build_editor` 显式分派。
 
@@ -142,7 +142,7 @@ class SemanticDenoiser(_GENFlowBase):
 
 ## 5. 训练更新：直接在线构造桥，不经过旧编辑器
 
-目标文件：`/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/train.py`。
+目标文件：`/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/train.py`。
 
 新增 `_semantic_denoising_update`。在 `train` 中按新接口分派；仍走 `LinearManifest + TrainingSampler`，不走 `TailManifest`，不读取 teacher-cache 或 real-states。
 
@@ -201,7 +201,7 @@ clean_calls=1
 
 ## 6. 数据：复用现有图像对，不引入 bbox 或 caption 前置条件
 
-目标文件：`/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/data.py`。
+目标文件：`/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/data.py`。
 
 继续使用现有 128k train / 1k val 清单与 source_family 划分；保留 geometry v2 的 load_pair。
 
@@ -230,9 +230,9 @@ keep_fraction=0，native_mix=0：第一版不增加额外样本混合。原生 T
 
 目标文件：
 
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/field.py`
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/inference.py`
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/cli.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/field.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/inference.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/cli.py`
 
 新增明确的接续函数，而不是把新类送进旧 `_edit` 的 duck typing 分支：
 
@@ -296,9 +296,9 @@ def semantic_correct(module, state, start_time, feedback, grid):
 
 目标文件：
 
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/__init__.py`
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/config.py`
-- `/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/qwen_latent_cot/u15_target_correction/checkpoint.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/__init__.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/config.py`
+- `/Users/zyd/Documents/LCoT-codex/reflective-t2i/qwen_latent_cot/u15_target_correction/checkpoint.py`
 
 新增 `EDITOR_INTERFACE_SEMANTIC="semantic_denoising_v1"`；component 仍为 editor，stage=1。避免仅因复用 TailGenerator 的计算，就保存为旧 tail checkpoint。
 
@@ -328,7 +328,7 @@ native: 当前原生模型 identity
 
 ## 9. 建议配置
 
-拟新增文件：`/Users/zyd/Documents/LCoT-codex/bagel-loop-layer-NPU/configs/u15_isochronic_state/semantic_denoising_v1.json`。
+拟新增文件：`/Users/zyd/Documents/LCoT-codex/reflective-t2i/configs/u15_isochronic_state/semantic_denoising_v1.json`。
 
 下面是实现完成后使用的配方，不是当前代码已经支持的配置：
 
@@ -407,9 +407,10 @@ core 继承的 512×512、原生 num_steps=50、timestep_shift=3、t_eps=0.05 �
 在 modelarts-qwen 训练主节点执行：
 
 ```bash
-cd /data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU
-PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
-CFG=/data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU/configs/u15_isochronic_state/semantic_denoising_v1.json
+# 从仓库根目录运行。集群默认布局：工作区/code/仓库；非此布局时请指定已有工作区。
+export REFLECTIVE_WORKSPACE="${REFLECTIVE_WORKSPACE:-$(cd ../.. && pwd)}"
+PY=${REFLECTIVE_WORKSPACE}/venvs/u15-NPU/bin/python
+CFG=configs/u15_isochronic_state/semantic_denoising_v1.json
 DATA=/data/zyd_workspace/isochronic_data_20261107/redesign_20261116/pairs_129k.jsonl
 OUT=/data/zyd_workspace/isochronic_data_20261107/semantic_denoising_20261117/stage1_t036_128k
 
@@ -433,7 +434,7 @@ OUT=/data/zyd_workspace/isochronic_data_20261107/semantic_denoising_20261117/sta
 ```bash
 "$PY" -m qwen_latent_cot.u15_target_correction.cli edit \
   --model /data/zyd_workspace/models/SenseNova-U1.5-8B-MoT \
-  --source /data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b \
+  --source "${REFLECTIVE_WORKSPACE}/code/sensenova-u15-c35c83b" \
   --config "$CFG" \
   --device npu:0 \
   --checkpoint-mode trained \

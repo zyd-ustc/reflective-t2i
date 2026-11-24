@@ -1,0 +1,218 @@
+{
+  "native_frozen": {
+    "overall": {
+      "n": 100,
+      "edit_followed": 0.32,
+      "bg_preserved": 0.73,
+      "quality_ok": 0.93,
+      "strict_pass": 0.29,
+      "edit_l1": 0.44886,
+      "bg_l1": 0.13615,
+      "hf_ratio": 1.0489
+    },
+    "by_action": {
+      "add": {
+        "n": 40,
+        "edit_followed": 0.3,
+        "bg_preserved": 0.775,
+        "quality_ok": 0.925,
+        "strict_pass": 0.25,
+        "edit_l1": 0.42123,
+        "bg_l1": 0.11964,
+        "hf_ratio": 1.0627
+      },
+      "remove": {
+        "n": 20,
+        "edit_followed": 0.6,
+        "bg_preserved": 0.7,
+        "quality_ok": 0.85,
+        "strict_pass": 0.55,
+        "edit_l1": 0.51043,
+        "bg_l1": 0.16825,
+        "hf_ratio": 1.0425
+      },
+      "attr": {
+        "n": 20,
+        "edit_followed": 0.15,
+        "bg_preserved": 0.65,
+        "quality_ok": 1.0,
+        "strict_pass": 0.15,
+        "edit_l1": 0.40983,
+        "bg_l1": 0.14096,
+        "hf_ratio": 1.0422
+      },
+      "move": {
+        "n": 20,
+        "edit_followed": 0.25,
+        "bg_preserved": 0.75,
+        "quality_ok": 0.95,
+        "strict_pass": 0.25,
+        "edit_l1": 0.48159,
+        "bg_l1": 0.13228,
+        "hf_ratio": 1.0345
+      }
+    }
+  },
+  "legacy_500": {
+    "overall": {
+      "n": 100,
+      "edit_followed": 0.28,
+      "bg_preserved": 0.68,
+      "quality_ok": 0.93,
+      "strict_pass": 0.25,
+      "edit_l1": 0.42678,
+      "bg_l1": 0.13104,
+      "hf_ratio": 1.0105
+    },
+    "by_action": {
+      "add": {
+        "n": 40,
+        "edit_followed": 0.225,
+        "bg_preserved": 0.65,
+        "quality_ok": 0.925,
+        "strict_pass": 0.175,
+        "edit_l1": 0.40201,
+        "bg_l1": 0.11632,
+        "hf_ratio": 1.0238
+      },
+      "remove": {
+        "n": 20,
+        "edit_followed": 0.55,
+        "bg_preserved": 0.65,
+        "quality_ok": 0.8,
+        "strict_pass": 0.5,
+        "edit_l1": 0.48014,
+        "bg_l1": 0.16026,
+        "hf_ratio": 0.993
+      },
+      "attr": {
+        "n": 20,
+        "edit_followed": 0.15,
+        "bg_preserved": 0.7,
+        "quality_ok": 1.0,
+        "strict_pass": 0.15,
+        "edit_l1": 0.39504,
+        "bg_l1": 0.13723,
+        "hf_ratio": 1.0055
+      },
+      "move": {
+        "n": 20,
+        "edit_followed": 0.25,
+        "bg_preserved": 0.75,
+        "quality_ok": 1.0,
+        "strict_pass": 0.25,
+        "edit_l1": 0.45472,
+        "bg_l1": 0.12507,
+        "hf_ratio": 1.0064
+      }
+    }
+  },
+  "v1_uncal_500 (33x/soar0.4)": {
+    "overall": {
+      "n": 100,
+      "edit_followed": 0.27,
+      "bg_preserved": 0.49,
+      "quality_ok": 0.71,
+      "strict_pass": 0.21,
+      "edit_l1": 0.39434,
+      "bg_l1": 0.13587,
+      "hf_ratio": 0.9169
+    },
+    "by_action": {
+      "add": {
+        "n": 40,
+        "edit_followed": 0.175,
+        "bg_preserved": 0.525,
+        "quality_ok": 0.775,
+        "strict_pass": 0.175,
+        "edit_l1": 0.37542,
+        "bg_l1": 0.12133,
+        "hf_ratio": 0.9296
+      },
+      "remove": {
+        "n": 20,
+        "edit_followed": 0.7,
+        "bg_preserved": 0.45,
+        "quality_ok": 0.55,
+        "strict_pass": 0.4,
+        "edit_l1": 0.43089,
+        "bg_l1": 0.15912,
+        "hf_ratio": 0.8905
+      },
+      "attr": {
+        "n": 20,
+        "edit_followed": 0.15,
+        "bg_preserved": 0.5,
+        "quality_ok": 0.7,
+        "strict_pass": 0.15,
+        "edit_l1": 0.37585,
+        "bg_l1": 0.15083,
+        "hf_ratio": 0.9231
+      },
+      "move": {
+        "n": 20,
+        "edit_followed": 0.15,
+        "bg_preserved": 0.45,
+        "quality_ok": 0.75,
+        "strict_pass": 0.15,
+        "edit_l1": 0.41411,
+        "bg_l1": 0.12675,
+        "hf_ratio": 0.9116
+      }
+    }
+  },
+  "v1_cal_500 (4x/soar0.15+warmup)": {
+    "overall": {
+      "n": 100,
+      "edit_followed": 0.31,
+      "bg_preserved": 0.64,
+      "quality_ok": 0.87,
+      "strict_pass": 0.27,
+      "edit_l1": 0.41147,
+      "bg_l1": 0.13071,
+      "hf_ratio": 0.9654
+    },
+    "by_action": {
+      "add": {
+        "n": 40,
+        "edit_followed": 0.275,
+        "bg_preserved": 0.625,
+        "quality_ok": 0.925,
+        "strict_pass": 0.225,
+        "edit_l1": 0.38931,
+        "bg_l1": 0.11675,
+        "hf_ratio": 0.9813
+      },
+      "remove": {
+        "n": 20,
+        "edit_followed": 0.55,
+        "bg_preserved": 0.6,
+        "quality_ok": 0.65,
+        "strict_pass": 0.45,
+        "edit_l1": 0.45853,
+        "bg_l1": 0.15718,
+        "hf_ratio": 0.9366
+      },
+      "attr": {
+        "n": 20,
+        "edit_followed": 0.2,
+        "bg_preserved": 0.65,
+        "quality_ok": 0.9,
+        "strict_pass": 0.2,
+        "edit_l1": 0.38474,
+        "bg_l1": 0.14037,
+        "hf_ratio": 0.964
+      },
+      "move": {
+        "n": 20,
+        "edit_followed": 0.25,
+        "bg_preserved": 0.7,
+        "quality_ok": 0.95,
+        "strict_pass": 0.25,
+        "edit_l1": 0.43546,
+        "bg_l1": 0.12252,
+        "hf_ratio": 0.9639
+      }
+    }
+  }
+}

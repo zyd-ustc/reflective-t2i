@@ -23,8 +23,9 @@
 唯一配置文件：`configs/u15_isochronic_state/isochronic_manifold.json`（继承 `core.json`）。
 
 ```bash
-cd /data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU
-PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
+# 从仓库根目录运行。集群默认布局：工作区/code/仓库；非此布局时请指定已有工作区。
+export REFLECTIVE_WORKSPACE="${REFLECTIVE_WORKSPACE:-$(cd ../.. && pwd)}"
+PY=${REFLECTIVE_WORKSPACE}/venvs/u15-NPU/bin/python
 
 "$PY" scripts/launch_train64.py \
   --linear /path/to/train_manifest.jsonl \

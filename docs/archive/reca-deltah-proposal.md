@@ -1,10 +1,10 @@
-# BAGEL MoT：RecA 稠密条件 + 纠错 Δh 方案
+# 历史方案：RecA 稠密条件与 Δh 纠错
 
-日期：2026-10-23（Asia/Shanghai）。状态：实验草案（待实现）。路径：`/workspace/bagel-LatentCoT-RecA-deltaH-correction-plan.md`（可直接落入仓库 `docs/`）。
+日期：2026-10-23（Asia/Shanghai）。状态：已归档。这是当时针对 BAGEL MoT 的草案，不是当前框架的实现说明。
 
 **一句话**：在 BAGEL MoT 上，用 UND hidden 作 RecA 式稠密条件对齐理解–生成；再在纠错回合对 GEN residual 加减对比激活差 \(\Delta h\)（CAA/steering 风格），把「看图 → 反馈 → 再生成」的显式多轮压进**单次采样**。数据**仅**高质量 GT 图文对 \((P,x_0)\)，失败/负例一律在线构造，不依赖外部 bad 标注集。
 
-与姊妹草案 `bagel-LatentCoT-SOAR-trajectory-correction-plan.md` 的分工：SOAR 草案主打 **off-traj 速度回归** \(v_{\mathrm{corr}}\)；本草案主打 **RecA 稠密条件 + 表征层 \(\Delta h\) 纠错**。二者可串接（先 RecA 再 \(\Delta h\)，或 \(\Delta h\) 与 SOAR 损失并行），但叙事与验收以本文件为准。
+与同期的 SOAR 轨迹纠偏草案的分工：SOAR 草案主打 **off-traj 速度回归** \(v_{\mathrm{corr}}\)；本草案主打 **RecA 稠密条件 + 表征层 \(\Delta h\) 纠错**。二者可串接（先 RecA 再 \(\Delta h\)，或 \(\Delta h\) 与 SOAR 损失并行），但叙事与验收以本文件为准。
 
 ---
 
@@ -368,4 +368,4 @@ Pilot：先 32 条高难 prompt × 固定 seed；通过后再扩 GenEval / DPG �
 - ActAdd: Activation Addition. arXiv:2308.10248  
 - BAGEL: Emerging Properties in Unified Multimodal Pretraining. arXiv:2505.14683  
 
-仓库内对照：`bagel-LatentCoT-SOAR-trajectory-correction-plan.md`、`docs/bagel_mot_internal_edit_loop_plan_20261023.md`、显式上界 closed-loop 文档、guidance-safe / mot_edit 历史记录。
+历史对照：同期的 SOAR 轨迹纠偏、MoT 内部编辑循环方案、显式上界 closed-loop 文档、guidance-safe / mot_edit 历史记录。

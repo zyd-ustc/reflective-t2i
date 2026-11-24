@@ -41,7 +41,7 @@ wheels = [
 ]
 
 [[package]]
-name = "bagel-latent-cot"
+name = "reflective-t2i"
 version = "0.9.0"
 source = { editable = "." }
 dependencies = [

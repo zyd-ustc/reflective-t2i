@@ -34,13 +34,15 @@
 以下在 `modelarts-64` 上执行。该节点可以访问 Metto，但没有挂载 `/mnt/sfs/250010019`：冻结清单已复制，编辑题的源图及所需元数据须另行复制。不要使用 `modelarts-64b` 的加速卡。
 
 ```bash
-CODE=/data/zyd_workspace/bagel-LatentCoT/code/bagel-loop-layer-NPU
+# 从仓库根目录运行。集群默认布局：工作区/code/仓库；非此布局时请指定已有工作区。
+export REFLECTIVE_WORKSPACE="${REFLECTIVE_WORKSPACE:-$(cd ../.. && pwd)}"
+CODE="$(pwd)"
 MODEL=/data/zyd_workspace/models/SenseNova-U1.5-8B-MoT
-SOURCE=/data/zyd_workspace/bagel-LatentCoT/code/sensenova-u15-c35c83b
+SOURCE=${REFLECTIVE_WORKSPACE}/code/sensenova-u15-c35c83b
 CKPT=/data/zyd_workspace/isochronic_data_20261107/isochronic_manifold_400k_20261119/step_006001
 CONFIG=$CODE/configs/u15_isochronic_state/isochronic_manifold.json
 ENV_FILE=$CODE/.env
-PY=/data/zyd_workspace/bagel-LatentCoT/venvs/u15-NPU/bin/python
+PY=${REFLECTIVE_WORKSPACE}/venvs/u15-NPU/bin/python
 cd "$CODE"
 ```
 
